@@ -7,27 +7,23 @@ use chromiumoxide::page::ScreenshotParams;
 use futures::StreamExt;
 use spider_fingerprint::spoof_viewport::get_random_viewport;
 use spider_fingerprint::Fingerprint;
+use tokio::fs::create_dir_all;
 
 #[tokio::test]
 async fn test_basic() -> Result<(), Box<dyn std::error::Error>> {
+    create_dir_all("./download/").await?;
+
     let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36";
 
     let mut emulation_config = spider_fingerprint::EmulationConfiguration::setup_defaults(&ua);
 
-    emulation_config.fingerprint = Fingerprint::Basic;
+    emulation_config.fingerprint = Fingerprint::None;
     emulation_config.tier = spider_fingerprint::configs::Tier::Basic;
     emulation_config.user_agent_data = Some(false);
 
     let vp = get_random_viewport();
 
-    let viewport = spider_fingerprint::spoof_viewport::Viewport {
-        width: vp.width,
-        height: vp.height,
-        device_scale_factor: vp.device_scale_factor,
-        emulating_mobile: vp.emulating_mobile,
-        is_landscape: vp.is_landscape,
-        has_touch: vp.has_touch,
-    };
+    let viewport = vp.into();
 
     let emulation_script =
         spider_fingerprint::emulate(&ua, &emulation_config, &Some(&viewport), &None);
@@ -42,14 +38,7 @@ async fn test_basic() -> Result<(), Box<dyn std::error::Error>> {
         &Some(spider_fingerprint::spoof_headers::HeaderDetailLevel::Extensive),
     );
 
-    let mut header_map = std::collections::HashMap::with_capacity(headers.len());
-
-    for (key, value) in headers.iter() {
-        let key_string = key.as_str().to_string();
-        if let Ok(value_string) = value.to_str() {
-            header_map.insert(key_string, value_string.to_string());
-        }
-    }
+    let extra_headers = spider_fingerprint::spoof_headers::headers_to_hashmap(headers);
 
     let config = HandlerConfig {
         request_intercept: true,
@@ -61,7 +50,7 @@ async fn test_basic() -> Result<(), Box<dyn std::error::Error>> {
             is_landscape: viewport.is_landscape,
             has_touch: viewport.has_touch,
         }),
-        extra_headers: Some(header_map),
+        extra_headers: Some(extra_headers),
         ..HandlerConfig::default()
     };
 
@@ -104,11 +93,6 @@ async fn test_basic() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     browser.quit_incognito_context().await?;
-    // // get the top post and save a screenshot of it
-    // page.find_element("table.itemlist tr")
-    //     .await?
-    //     .save_screenshot(CaptureScreenshotFormat::Png, "top-post.png")
-    //     .await?;
 
     Ok(())
 }

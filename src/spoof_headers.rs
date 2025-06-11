@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use http::header::{
     HeaderValue, ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, CACHE_CONTROL, CONNECTION, HOST, PRAGMA,
     REFERER, UPGRADE_INSECURE_REQUESTS, USER_AGENT,
@@ -699,6 +701,20 @@ pub fn emulate_headers(
     }
 
     headers
+}
+
+/// Convert headers to hashmap.
+pub fn headers_to_hashmap(headers: HeaderMap) -> HashMap<String, String> {
+    let mut header_map = std::collections::HashMap::with_capacity(headers.len());
+
+    for (key, value) in headers.iter() {
+        let key_string = key.as_str().to_string();
+        if let Ok(value_string) = value.to_str() {
+            header_map.insert(key_string, value_string.to_string());
+        }
+    }
+
+    header_map
 }
 
 /// Should title the case headers.
