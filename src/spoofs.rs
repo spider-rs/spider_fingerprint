@@ -194,10 +194,10 @@ pub fn spoof_history_length_script(length: u32) -> String {
     )
 }
 
-/// Spoof the hardware concurrency limit.
+/// Spoof the hardware concurrency limit across all scopes.
 pub fn spoof_hardware_concurrency(concurrency: usize) -> String {
     format!(
-        r#"(()=>{{const c={c};function hardwareConcurrency(){{return c}}hardwareConcurrency.toString=()=>'function get hardwareConcurrency() {{ [native code] }}';const s=()=>{{try{{Object.defineProperty(Navigator.prototype,'hardwareConcurrency',{{get:hardwareConcurrency,enumerable:!0,configurable:!0}})}}catch{{}}try{{Object.defineProperty(WorkerNavigator.prototype,'hardwareConcurrency',{{get:hardwareConcurrency,enumerable:!0,configurable:!0}})}}catch{{}}}};s();}})();"#,
+        r#"(()=>{{const c={c};const g=()=>c;Object.defineProperty(g,'toString',{{value:()=>`function get hardwareConcurrency() {{ [native code] }}`}});Object.defineProperty(Navigator.prototype,'hardwareConcurrency',{{get:g,enumerable:!0,configurable:!0}});typeof WorkerNavigator !== 'undefined' && Object.defineProperty(WorkerNavigator.prototype,'hardwareConcurrency',{{get:g,enumerable:!0,configurable:!0}});}})();"#,
         c = concurrency
     )
 }
@@ -255,3 +255,18 @@ pub fn spoof_referer_script_randomized_domain(domain_parsed: &url::Url) -> Strin
 
 // spoof unused atm for headless browser settings entry.
 pub const SPOOF_MEDIA: &str = r#"Object.defineProperty(Navigator.prototype,'mediaDevices',{get:()=>({getUserMedia:undefined}),configurable:!0,enumerable:!1}),Object.defineProperty(Navigator.prototype,'webkitGetUserMedia',{get:()=>undefined,configurable:!0,enumerable:!1}),Object.defineProperty(Navigator.prototype,'mozGetUserMedia',{get:()=>undefined,configurable:!0,enumerable:!1}),Object.defineProperty(Navigator.prototype,'getUserMedia',{get:()=>undefined,configurable:!0,enumerable:!1});"#;
+
+#[test]
+fn test_spoof_hardware_concurrency_output() {
+    let js = spoof_hardware_concurrency(8);
+
+    assert!(js.contains("const c=8;"));
+    assert!(
+        js.contains("Navigator.prototype") && js.contains("WorkerNavigator.prototype"),
+        "Missing prototype patches"
+    );
+    assert!(
+        js.contains("function get hardwareConcurrency() { [native code] }"),
+        "Missing native-like toString"
+    );
+}
