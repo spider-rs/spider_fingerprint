@@ -210,10 +210,9 @@ pub fn unified_worker_override(concurrency: usize, vendor: &str, renderer: &str)
     let hc_worker_script = spoof_hardware_concurrency(concurrency);
     let gpu_worker_script = hide_webgl_worker_script(&escaped_vendor, &escaped_renderer);
 
-    // Combined worker script injection (both spoofs at once)
     let combined_worker_script = format!(
-        "{hc_script};{gpu_script};",
-        hc_script = hc_worker_script,
+        r#"try {{ Object.defineProperty(navigator,'hardwareConcurrency', {{ get:()=>{concurrency},enumerable: true, configurable: true }});}} catch(e){{ navigator.hardwareConcurrency = {concurrency}; }} {gpu_script};"#,
+        concurrency = concurrency,
         gpu_script = gpu_worker_script
     );
 
@@ -222,6 +221,19 @@ pub fn unified_worker_override(concurrency: usize, vendor: &str, renderer: &str)
         hc_script = hc_worker_script,
         gpu_script = gpu_worker_script,
         combined_script = combined_worker_script
+    )
+}
+
+/// Worker override webgl.
+pub fn worker_override(vendor: &str, renderer: &str) -> String {
+    let escaped_vendor = vendor.replace('\'', "\\'");
+    let escaped_renderer = renderer.replace('\'', "\\'");
+
+    let gpu_worker_script = hide_webgl_worker_script(&escaped_vendor, &escaped_renderer);
+
+    format!(
+        r#"(()=>{{{gpu_script};const wrap=W=>function(u,...a){{const abs=new URL(u,location.href).toString(),b=`(()=>{{{gpu_script};fetch("${{abs}}").then(r=>r.text()).then(t=>(0,eval)(t));}})();`;return new W(URL.createObjectURL(new Blob([b],{{type:'application/javascript'}})),...a)}};window.Worker=wrap(window.Worker);window.SharedWorker=wrap(window.SharedWorker);}})();"#,
+        gpu_script = gpu_worker_script,
     )
 }
 

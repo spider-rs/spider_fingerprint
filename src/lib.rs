@@ -89,10 +89,10 @@ pub fn mobile_model_from_user_agent(user_agent: &str) -> Option<&'static str> {
 }
 
 /// Generate the initial stealth script to send in one command.
-pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
+fn build_stealth_script_base(tier: Tier, os: AgentOs, concurrency: bool) -> String {
     use crate::spoofs::{
-        spoof_hardware_concurrency, unified_worker_override, HIDE_CHROME, HIDE_CONSOLE,
-        HIDE_WEBDRIVER, NAVIGATOR_SCRIPT, PLUGIN_AND_MIMETYPE_SPOOF,
+        spoof_hardware_concurrency, unified_worker_override, worker_override, HIDE_CHROME,
+        HIDE_CONSOLE, HIDE_WEBDRIVER, NAVIGATOR_SCRIPT, PLUGIN_AND_MIMETYPE_SPOOF,
     };
 
     let gpu_profile = select_random_gpu_profile(os);
@@ -100,12 +100,14 @@ pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
 
     let spoof_webgl = if tier == Tier::BasicNoWorker {
         Default::default()
-    } else {
+    } else if concurrency {
         unified_worker_override(
             gpu_profile.hardware_concurrency,
             gpu_profile.webgl_vendor,
             gpu_profile.webgl_renderer,
         )
+    } else {
+        worker_override(gpu_profile.webgl_vendor, gpu_profile.webgl_renderer)
     };
 
     let spoof_concurrency = spoof_hardware_concurrency(gpu_profile.hardware_concurrency);
@@ -147,6 +149,16 @@ pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
     } else {
         Default::default()
     }
+}
+
+/// Generate the initial stealth script to send in one command.
+pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
+    build_stealth_script_base(tier, os, true)
+}
+
+/// Generate the initial stealth script to send in one command without hardware concurrency.
+pub fn build_stealth_script_no_concurrency(tier: Tier, os: AgentOs) -> String {
+    build_stealth_script_base(tier, os, false)
 }
 
 /// Generate the hide plugins script.
@@ -204,6 +216,8 @@ pub struct EmulationConfiguration {
     pub user_agent_data: Option<bool>,
     /// Touch screen enabling or disabling emulation based on device?
     pub touch_screen: bool,
+    /// Hardware concurrency emulation?
+    pub hardware_concurrency: bool,
 }
 
 /// Get the OS being used.
@@ -242,6 +256,7 @@ impl EmulationConfiguration {
         emulation_config.firefox_agent = firefox_agent;
         emulation_config.agent_os = agent_os;
         emulation_config.touch_screen = false; // by default spider_chrome emulates touch over CDP.
+        emulation_config.hardware_concurrency = true; // should be disabled and moved to CDP to cover all frames.
 
         emulation_config
     }
@@ -350,7 +365,11 @@ pub fn emulate(
         Default::default()
     };
 
-    let st = crate::build_stealth_script(config.tier, agent_os);
+    let st = if config.hardware_concurrency {
+        crate::build_stealth_script(config.tier, agent_os)
+    } else {
+        crate::build_stealth_script_no_concurrency(config.tier, agent_os)
+    };
 
     let touch_screen_script = if config.touch_screen {
         spoof_touch_screen(mobile_device)
