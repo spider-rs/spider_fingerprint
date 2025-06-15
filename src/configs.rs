@@ -33,15 +33,17 @@ impl Tier {
 #[derive(PartialEq, Clone, Copy, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AgentOs {
-    #[default]
     /// Linux.
     Linux,
     /// Mac.
     Mac,
+    /// Iphone
+    IPhone,
     /// Windows.
     Windows,
     /// Android.
     Android,
+    #[default]
     /// Unknown.
     Unknown,
 }

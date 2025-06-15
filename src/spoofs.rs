@@ -50,7 +50,7 @@ pub fn spoof_media_labels_script(agent_os: AgentOs) -> String {
         AgentOs::Mac => "FaceTime HD Camera",
         AgentOs::Windows => "Integrated Webcam",
         AgentOs::Linux | AgentOs::Unknown => "Integrated Camera",
-        AgentOs::Android => "Front Camera",
+        AgentOs::Android | AgentOs::IPhone => "Front Camera",
     };
 
     format!(
@@ -119,7 +119,7 @@ pub fn spoof_screen_script_rng<R: Rng>(
                 24
             }
         }
-        AgentOs::Android => 24,
+        AgentOs::Android | AgentOs::IPhone => 24,
     };
 
     format!(
@@ -166,7 +166,7 @@ pub fn resolve_dpr(
         } else {
             match platform {
                 AgentOs::Mac | AgentOs::Linux | AgentOs::Windows | AgentOs::Unknown => 1.0,
-                AgentOs::Android => 2.0, // can be 3.0+ on some phones, but 2.0 is safe default
+                AgentOs::Android | AgentOs::IPhone => 2.0, // can be 3.0+ on some phones, but 2.0 is safe default
             }
         }
     })

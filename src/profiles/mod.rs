@@ -2,6 +2,8 @@
 pub mod gpu;
 /// GPU profiles tailored specifically for Android devices.
 pub mod gpu_android;
+/// GPU profiles for Apple iPhone systems based on Apple Silicon (M-series).
+pub mod gpu_iphone;
 /// Constants defining realistic GPU limits such as maximum texture size and resources.
 pub mod gpu_limits;
 /// GPU profiles optimized for desktop and laptop Linux-based operating systems.

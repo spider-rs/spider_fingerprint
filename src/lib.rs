@@ -21,16 +21,26 @@ pub mod spoof_webgl;
 /// Generic spoofs.
 pub mod spoofs;
 
-use profiles::{
-    gpu::select_random_gpu_profile,
-    gpu_limits::{build_gpu_request_adapter_script_from_limits, GpuLimits},
-};
-use spoof_gpu::build_gpu_spoof_script_wgsl;
-
-use crate::configs::{AgentOs, Tier};
 use aho_corasick::AhoCorasick;
+
 pub use spoof_headers::emulate_headers;
 pub use spoof_refererer::spoof_referrer;
+
+use configs::{AgentOs, Tier};
+use profiles::{
+    gpu::{select_random_gpu_profile, GpuProfile},
+    gpu_limits::{build_gpu_request_adapter_script_from_limits, GpuLimits},
+};
+use rand::Rng;
+use spoof_gpu::{
+    build_gpu_spoof_script_wgsl, FP_JS, FP_JS_GPU_LINUX, FP_JS_GPU_MAC, FP_JS_GPU_WINDOWS,
+    FP_JS_LINUX, FP_JS_MAC, FP_JS_WINDOWS,
+};
+use spoofs::{
+    resolve_dpr, spoof_history_length_script, spoof_media_codecs_script, spoof_media_labels_script,
+    spoof_screen_script_rng, spoof_touch_screen, DISABLE_DIALOGS, SPOOF_NOTIFICATIONS,
+    SPOOF_PERMISSIONS_QUERY,
+};
 
 pub use http;
 pub use url;
@@ -88,24 +98,35 @@ pub fn mobile_model_from_user_agent(user_agent: &str) -> Option<&'static str> {
         .map(|m| MOBILE_PATTERNS[m.pattern()])
 }
 
+/// Get a random device hardware concurrency.
+pub fn get_random_hardware_concurrency(user_agent: &str) -> usize {
+    let gpu_profile = select_random_gpu_profile(get_agent_os(user_agent));
+    gpu_profile.hardware_concurrency
+}
+
 /// Generate the initial stealth script to send in one command.
-fn build_stealth_script_base(tier: Tier, os: AgentOs, concurrency: bool) -> String {
+fn build_stealth_script_base(
+    gpu_profile: &'static GpuProfile,
+    tier: Tier,
+    os: AgentOs,
+    concurrency: bool,
+) -> String {
     use crate::spoofs::{
-        spoof_hardware_concurrency, unified_worker_override, worker_override, HIDE_CHROME,
-        HIDE_CONSOLE, HIDE_WEBDRIVER, NAVIGATOR_SCRIPT, PLUGIN_AND_MIMETYPE_SPOOF,
+        spoof_hardware_concurrency, unified_worker_override,
+        worker_override, HIDE_CHROME, HIDE_CONSOLE, HIDE_WEBDRIVER, NAVIGATOR_SCRIPT,
+        PLUGIN_AND_MIMETYPE_SPOOF,
     };
 
-    let gpu_profile = select_random_gpu_profile(os);
     let spoof_gpu = build_gpu_spoof_script_wgsl(gpu_profile.canvas_format);
 
     let spoof_webgl = if tier == Tier::BasicNoWorker {
         Default::default()
     } else if concurrency {
-        unified_worker_override(
-            gpu_profile.hardware_concurrency,
-            gpu_profile.webgl_vendor,
-            gpu_profile.webgl_renderer,
-        )
+            unified_worker_override(
+                gpu_profile.hardware_concurrency,
+                gpu_profile.webgl_vendor,
+                gpu_profile.webgl_renderer,
+            )
     } else {
         worker_override(gpu_profile.webgl_vendor, gpu_profile.webgl_renderer)
     };
@@ -153,12 +174,32 @@ fn build_stealth_script_base(tier: Tier, os: AgentOs, concurrency: bool) -> Stri
 
 /// Generate the initial stealth script to send in one command.
 pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
-    build_stealth_script_base(tier, os, true)
+    let gpu_profile = select_random_gpu_profile(os);
+    build_stealth_script_base(gpu_profile, tier, os, true)
 }
 
 /// Generate the initial stealth script to send in one command without hardware concurrency.
 pub fn build_stealth_script_no_concurrency(tier: Tier, os: AgentOs) -> String {
-    build_stealth_script_base(tier, os, false)
+    let gpu_profile = select_random_gpu_profile(os);
+    build_stealth_script_base(gpu_profile, tier, os, false)
+}
+
+/// Generate the initial stealth script to send in one command and profile.
+pub fn build_stealth_script_with_profile(
+    gpu_profile: &'static GpuProfile,
+    tier: Tier,
+    os: AgentOs,
+) -> String {
+    build_stealth_script_base(gpu_profile, tier, os, true)
+}
+
+/// Generate the initial stealth script to send in one command without hardware concurrency and profile.
+pub fn build_stealth_script_no_concurrency_with_profile(
+    gpu_profile: &'static GpuProfile,
+    tier: Tier,
+    os: AgentOs,
+) -> String {
+    build_stealth_script_base(gpu_profile, tier, os, false)
 }
 
 /// Generate the hide plugins script.
@@ -233,6 +274,11 @@ pub fn get_agent_os(user_agent: &str) -> AgentOs {
             agent_os = AgentOs::Windows;
         } else if user_agent.contains("Android") {
             agent_os = AgentOs::Android;
+        } else if user_agent.contains("iPhone")
+            || user_agent.contains("iPad")
+            || user_agent.contains("iOS")
+        {
+            agent_os = AgentOs::IPhone;
         }
     }
 
@@ -273,26 +319,20 @@ fn join_scripts<I: IntoIterator<Item = impl AsRef<str>>>(parts: I) -> String {
 }
 
 /// Emulate a real chrome browser.
-pub fn emulate(
+pub fn emulate_base(
     user_agent: &str,
     config: &EmulationConfiguration,
     viewport: &Option<&crate::spoof_viewport::Viewport>,
     evaluate_on_new_document: &Option<Box<String>>,
+    gpu_profile: Option<&'static GpuProfile>,
 ) -> Option<String> {
-    use crate::spoof_gpu::{
-        FP_JS, FP_JS_GPU_LINUX, FP_JS_GPU_MAC, FP_JS_GPU_WINDOWS, FP_JS_LINUX, FP_JS_MAC,
-        FP_JS_WINDOWS,
-    };
-    use crate::spoofs::{
-        resolve_dpr, spoof_history_length_script, spoof_media_codecs_script,
-        spoof_media_labels_script, spoof_screen_script_rng, spoof_touch_screen, DISABLE_DIALOGS,
-        SPOOF_NOTIFICATIONS, SPOOF_PERMISSIONS_QUERY,
-    };
-    use rand::Rng;
-
     let stealth = config.tier.stealth();
     let dismiss_dialogs = config.dismiss_dialogs;
-    let agent_os = config.agent_os;
+    let agent_os = if config.agent_os == AgentOs::Unknown {
+        get_agent_os(user_agent)
+    } else {
+        config.agent_os
+    };
     let firefox_agent = config.firefox_agent;
 
     let spoof_script = if stealth && !firefox_agent && config.user_agent_data.unwrap_or(true) {
@@ -365,10 +405,12 @@ pub fn emulate(
         Default::default()
     };
 
+    let gpu_profile = gpu_profile.unwrap_or(select_random_gpu_profile(agent_os));
+
     let st = if config.hardware_concurrency {
-        crate::build_stealth_script(config.tier, agent_os)
+        crate::build_stealth_script_with_profile(gpu_profile, config.tier, agent_os)
     } else {
-        crate::build_stealth_script_no_concurrency(config.tier, agent_os)
+        crate::build_stealth_script_no_concurrency_with_profile(gpu_profile, config.tier, agent_os)
     };
 
     let touch_screen_script = if config.touch_screen {
@@ -448,4 +490,31 @@ pub fn emulate(
     };
 
     merged_script
+}
+
+/// Emulate a real chrome browser.
+pub fn emulate(
+    user_agent: &str,
+    config: &EmulationConfiguration,
+    viewport: &Option<&crate::spoof_viewport::Viewport>,
+    evaluate_on_new_document: &Option<Box<String>>,
+) -> Option<String> {
+    emulate_base(user_agent, config, viewport, evaluate_on_new_document, None)
+}
+
+/// Emulate a real chrome browser with a gpu profile.
+pub fn emulate_with_profile(
+    user_agent: &str,
+    config: &EmulationConfiguration,
+    viewport: &Option<&crate::spoof_viewport::Viewport>,
+    evaluate_on_new_document: &Option<Box<String>>,
+    gpu_profile: &'static GpuProfile,
+) -> Option<String> {
+    emulate_base(
+        user_agent,
+        config,
+        viewport,
+        evaluate_on_new_document,
+        Some(gpu_profile),
+    )
 }

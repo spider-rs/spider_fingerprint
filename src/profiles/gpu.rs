@@ -1,4 +1,5 @@
 pub use super::gpu_android::GPU_PROFILES_ANDROID;
+pub use super::gpu_iphone::GPU_PROFILES_IPHONE;
 pub use super::gpu_linux::GPU_PROFILES_LINUX;
 pub use super::gpu_mac::GPU_PROFILES_MAC;
 pub use super::gpu_profile::GpuProfile;
@@ -21,6 +22,9 @@ pub static FALLBACK_GPU_PROFILE: GpuProfile = GpuProfile {
 pub fn select_random_gpu_profile(os: crate::AgentOs) -> &'static GpuProfile {
     match os {
         AgentOs::Mac => GPU_PROFILES_MAC
+            .choose(&mut rand::rng())
+            .unwrap_or(&FALLBACK_GPU_PROFILE),
+        AgentOs::IPhone => GPU_PROFILES_IPHONE
             .choose(&mut rand::rng())
             .unwrap_or(&FALLBACK_GPU_PROFILE),
         AgentOs::Windows => GPU_PROFILES_WINDOWS
