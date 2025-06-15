@@ -197,7 +197,7 @@ pub fn spoof_history_length_script(length: u32) -> String {
 /// Spoof the hardware concurrency limit across all scopes.
 pub fn spoof_hardware_concurrency(concurrency: usize) -> String {
     format!(
-        r#"(()=>{{const c={c};const g=()=>c;Object.defineProperty(g,'toString',{{value:()=>`function get hardwareConcurrency() {{ [native code] }}`}});Object.defineProperty(Navigator.prototype,'hardwareConcurrency',{{get:g,enumerable:!0,configurable:!0}});typeof WorkerNavigator !== 'undefined' && Object.defineProperty(WorkerNavigator.prototype,'hardwareConcurrency',{{get:g,enumerable:!0,configurable:!0}});}})();"#,
+        r#"(()=>{{const c={c};function hardwareConcurrency(){{return c}}hardwareConcurrency.toString=()=>'function get hardwareConcurrency() {{ [native code] }}';const s=()=>{{try{{Object.defineProperty(Navigator.prototype,'hardwareConcurrency',{{get:hardwareConcurrency,enumerable:!0,configurable:!0}})}}catch{{}}try{{typeof WorkerNavigator !== 'undefined' && Object.defineProperty(WorkerNavigator.prototype,'hardwareConcurrency',{{get:hardwareConcurrency,enumerable:!0,configurable:!0}})}}catch{{}}}};s();}})();"#,
         c = concurrency
     )
 }

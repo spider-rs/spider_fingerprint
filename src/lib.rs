@@ -97,11 +97,17 @@ pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
 
     let gpu_profile = select_random_gpu_profile(os);
     let spoof_gpu = build_gpu_spoof_script_wgsl(gpu_profile.canvas_format);
-    let spoof_webgl = unified_worker_override(
-        gpu_profile.hardware_concurrency,
-        gpu_profile.webgl_vendor,
-        gpu_profile.webgl_renderer,
-    );
+
+    let spoof_webgl = if tier == Tier::BasicNoWorker {
+        Default::default()
+    } else {
+        unified_worker_override(
+            gpu_profile.hardware_concurrency,
+            gpu_profile.webgl_vendor,
+            gpu_profile.webgl_renderer,
+        )
+    };
+
     let spoof_concurrency = spoof_hardware_concurrency(gpu_profile.hardware_concurrency);
 
     let mut gpu_limit = GpuLimits::for_os(os);
@@ -120,7 +126,7 @@ pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
         &gpu_limit,
     );
 
-    if tier == Tier::Basic {
+    if tier == Tier::Basic || tier == Tier::BasicNoWorker {
         format!(
             r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_webgl}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}{PLUGIN_AND_MIMETYPE_SPOOF}"#
         )
@@ -196,6 +202,8 @@ pub struct EmulationConfiguration {
     pub firefox_agent: bool,
     /// Add userAgentData. Usually can be disabled when set via CDP for accuracy.
     pub user_agent_data: Option<bool>,
+    /// Touch screen enabling or disabling emulation based on device?
+    pub touch_screen: bool,
 }
 
 /// Get the OS being used.
@@ -233,6 +241,7 @@ impl EmulationConfiguration {
 
         emulation_config.firefox_agent = firefox_agent;
         emulation_config.agent_os = agent_os;
+        emulation_config.touch_screen = false; // by default spider_chrome emulates touch over CDP.
 
         emulation_config
     }
@@ -343,6 +352,12 @@ pub fn emulate(
 
     let st = crate::build_stealth_script(config.tier, agent_os);
 
+    let touch_screen_script = if config.touch_screen {
+        spoof_touch_screen(mobile_device)
+    } else {
+        Default::default()
+    };
+
     // Final combined script to inject
     let merged_script = if let Some(script) = evaluate_on_new_document.as_deref() {
         if fingerprint {
@@ -354,7 +369,7 @@ pub fn emulate(
                 SPOOF_NOTIFICATIONS,
                 SPOOF_PERMISSIONS_QUERY,
                 &spoof_media_codecs_script(),
-                &spoof_touch_screen(mobile_device),
+                &touch_screen_script,
                 &spoof_media_labels_script(agent_os),
                 &spoof_history_length_script(rand::rng().random_range(1..=6)),
                 &st,
@@ -372,7 +387,7 @@ pub fn emulate(
                 SPOOF_NOTIFICATIONS,
                 SPOOF_PERMISSIONS_QUERY,
                 &spoof_media_codecs_script(),
-                &spoof_touch_screen(mobile_device),
+                &touch_screen_script,
                 &spoof_media_labels_script(agent_os),
                 &spoof_history_length_script(rand::rng().random_range(1..=6)),
                 &st,
@@ -391,7 +406,7 @@ pub fn emulate(
             SPOOF_NOTIFICATIONS,
             SPOOF_PERMISSIONS_QUERY,
             &spoof_media_codecs_script(),
-            &spoof_touch_screen(mobile_device),
+            &touch_screen_script,
             &spoof_media_labels_script(agent_os),
             &spoof_history_length_script(rand::rng().random_range(1..=6)),
             &st,
@@ -404,7 +419,7 @@ pub fn emulate(
             SPOOF_NOTIFICATIONS,
             SPOOF_PERMISSIONS_QUERY,
             &spoof_media_codecs_script(),
-            &spoof_touch_screen(mobile_device),
+            &touch_screen_script,
             &spoof_media_labels_script(agent_os),
             &spoof_history_length_script(rand::rng().random_range(1..=6)),
             &st,
