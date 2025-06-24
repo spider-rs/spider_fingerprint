@@ -1,6 +1,6 @@
 [package]
 name = "spider_fingerprint"
-version = "2.37.115"
+version = "2.37.116"
 authors = ["j-mendez <jeff@spider.cloud>"]
 description = "Fingerprint library for Rust."
 repository = "https://github.com/spider-rs/spider_fingerprint"
@@ -10,7 +10,7 @@ keywords = ["fingerprint", "browser"]
 categories = ["web-programming", "command-line-utilities"]
 license = "MIT"
 documentation = "https://docs.rs/spider_fingerprint"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 rand = "0.9"
