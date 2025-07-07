@@ -1,9 +1,22 @@
-use std::collections::BTreeMap;
-use std::fs::{copy, rename, File};
-use std::io::{BufWriter, Write};
 use std::path::Path;
 
+#[cfg(not(feature = "dynamic-versions"))]
 fn main() {
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let out_path = Path::new(&out_dir).join("chrome_versions.rs");
+    let fallback_path = "chrome_versions.rs.fallback";
+
+    let _ = std::fs::copy(fallback_path, &out_path);
+
+    println!("cargo:rerun-if-changed=build/chrome_versions.rs.fallback");
+}
+
+#[cfg(feature = "dynamic-versions")]
+fn main() {
+    use std::collections::BTreeMap;
+    use std::fs::{copy, rename, File};
+    use std::io::{BufWriter, Write};
+
     let out_path = std::env::var("OUT_DIR").unwrap();
     let generated_path = format!("{}/chrome_versions.rs", out_path);
     let tmp_path = format!("{}/chrome_versions.rs.tmp", out_path);

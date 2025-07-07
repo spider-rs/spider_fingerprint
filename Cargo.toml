@@ -1,6 +1,6 @@
 [package]
 name = "spider_fingerprint"
-version = "2.37.116"
+version = "2.37.119"
 authors = ["j-mendez <jeff@spider.cloud>"]
 description = "Fingerprint library for Rust."
 repository = "https://github.com/spider-rs/spider_fingerprint"
@@ -12,6 +12,15 @@ license = "MIT"
 documentation = "https://docs.rs/spider_fingerprint"
 edition = "2021"
 
+include = [
+    "build.rs",
+    "chrome_versions.rs.fallback",
+    "src/**",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
+
 [dependencies]
 rand = "0.9"
 lazy_static = "1"
@@ -19,7 +28,7 @@ url = "2"
 case_insensitive_string = { version = "0.2", features = ["compact"] }
 serde = { version = "1", features = ["derive"], optional = true }
 phf = { version = "0.11", features = ["macros"] }
-http = "1"
+http = { version = "1", optional = true }
 aho-corasick = "1"
 
 [dev-dependencies]
@@ -28,10 +37,12 @@ spider_chrome = { version = "2", default-features = false }
 futures = "0.3"
 
 [features]
-default = ["serde"]
+default = ["serde", "dynamic-versions", "headers"]
 serde = ["dep:serde", "case_insensitive_string/serde"]
+dynamic-versions = ["dep:reqwest"]
+headers  = ["dep:http"]
 
 [build-dependencies]
-reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false, optional = true }
 serde_json = "1.0"
 phf_codegen = "0.11"

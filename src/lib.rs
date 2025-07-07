@@ -6,6 +6,7 @@ pub mod configs;
 pub mod profiles;
 /// GPU spoofs.
 pub mod spoof_gpu;
+#[cfg(feature = "headers")]
 /// Spoof HTTP headers.
 pub mod spoof_headers;
 /// Spoof mouse-movement.
@@ -23,6 +24,7 @@ pub mod spoofs;
 
 use aho_corasick::AhoCorasick;
 
+#[cfg(feature = "headers")]
 pub use spoof_headers::emulate_headers;
 pub use spoof_refererer::spoof_referrer;
 
@@ -42,6 +44,7 @@ use spoofs::{
     SPOOF_PERMISSIONS_QUERY,
 };
 
+#[cfg(feature = "headers")]
 pub use http;
 pub use url;
 
@@ -50,13 +53,13 @@ lazy_static::lazy_static! {
     pub static ref LATEST_CHROME_FULL_VERSION_FULL: &'static str = CHROME_VERSIONS_BY_MAJOR
         .get("latest")
         .and_then(|arr| arr.first().copied())
-        .unwrap_or(&"137.0.7151.56");
+        .unwrap_or(&"138.0.7204.92");
     /// The latest Chrome version major ex: 137.
     pub static ref BASE_CHROME_VERSION: u32 = LATEST_CHROME_FULL_VERSION_FULL
         .split('.')
         .next()
         .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(137);
+        .unwrap_or(138);
     /// The latest Chrome not a brand version, configurable via the `CHROME_NOT_A_BRAND_VERSION` env variable.
     pub static ref CHROME_NOT_A_BRAND_VERSION: String = std::env::var("CHROME_NOT_A_BRAND_VERSION")
         .ok()
@@ -112,9 +115,8 @@ fn build_stealth_script_base(
     concurrency: bool,
 ) -> String {
     use crate::spoofs::{
-        spoof_hardware_concurrency, unified_worker_override,
-        worker_override, HIDE_CHROME, HIDE_CONSOLE, HIDE_WEBDRIVER, NAVIGATOR_SCRIPT,
-        PLUGIN_AND_MIMETYPE_SPOOF,
+        spoof_hardware_concurrency, unified_worker_override, worker_override, HIDE_CHROME,
+        HIDE_CONSOLE, HIDE_WEBDRIVER, NAVIGATOR_SCRIPT, PLUGIN_AND_MIMETYPE_SPOOF,
     };
 
     let spoof_gpu = build_gpu_spoof_script_wgsl(gpu_profile.canvas_format);
@@ -122,11 +124,11 @@ fn build_stealth_script_base(
     let spoof_webgl = if tier == Tier::BasicNoWorker {
         Default::default()
     } else if concurrency {
-            unified_worker_override(
-                gpu_profile.hardware_concurrency,
-                gpu_profile.webgl_vendor,
-                gpu_profile.webgl_renderer,
-            )
+        unified_worker_override(
+            gpu_profile.hardware_concurrency,
+            gpu_profile.webgl_vendor,
+            gpu_profile.webgl_renderer,
+        )
     } else {
         worker_override(gpu_profile.webgl_vendor, gpu_profile.webgl_renderer)
     };
