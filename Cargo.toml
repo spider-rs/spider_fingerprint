@@ -34,10 +34,10 @@ aho-corasick = "1"
 [features]
 default = ["serde", "dynamic-versions", "headers"]
 serde = ["dep:serde", "case_insensitive_string/serde"]
-dynamic-versions = ["dep:reqwest"]
+dynamic-versions = ["dep:reqwest", "dep:serde_json", "dep:phf_codegen"]
 headers  = ["dep:http"]
 
 [build-dependencies]
 reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false, optional = true }
-serde_json = "1.0"
-phf_codegen = "0.11"
+serde_json = { version = "1.0", optional = true }
+phf_codegen = { version = "0.11", optional = true }
