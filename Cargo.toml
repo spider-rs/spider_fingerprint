@@ -1,6 +1,6 @@
 [package]
 name = "spider_fingerprint"
-version = "2.37.121"
+version = "2.37.122"
 authors = ["j-mendez <jeff@spider.cloud>"]
 description = "Fingerprint library for Rust."
 repository = "https://github.com/spider-rs/spider_fingerprint"
@@ -32,10 +32,11 @@ http = { version = "1", optional = true }
 aho-corasick = "1"
 
 [features]
-default = ["serde", "dynamic-versions", "headers"]
+default = ["serde", "dynamic-versions", "headers", "std"]
 serde = ["dep:serde", "case_insensitive_string/serde"]
-dynamic-versions = ["dep:reqwest", "dep:serde_json", "dep:phf_codegen"]
+dynamic-versions = ["dep:reqwest", "dep:serde_json", "dep:phf_codegen", "std"]
 headers  = ["dep:http"]
+std = []
 
 [build-dependencies]
 reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false, optional = true }

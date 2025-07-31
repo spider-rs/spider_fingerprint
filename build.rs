@@ -2,6 +2,7 @@ use std::path::Path;
 
 #[cfg(not(feature = "dynamic-versions"))]
 fn main() {
+    println!("cargo:rustc-cfg=build_script_ran");
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let out_path = Path::new(&out_dir).join("chrome_versions.rs");
     let fallback_path = "chrome_versions.rs.fallback";
@@ -13,6 +14,7 @@ fn main() {
 
 #[cfg(feature = "dynamic-versions")]
 fn main() {
+    println!("cargo:rustc-cfg=build_script_ran");
     use std::collections::BTreeMap;
     use std::fs::{copy, rename, File};
     use std::io::{BufWriter, Write};

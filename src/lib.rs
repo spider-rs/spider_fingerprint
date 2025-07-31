@@ -1,4 +1,5 @@
-include!(concat!(env!("OUT_DIR"), "/chrome_versions.rs"));
+/// Versions for chrome.
+pub mod versions;
 
 /// Builder types.
 pub mod configs;
@@ -21,8 +22,6 @@ pub mod spoof_viewport;
 pub mod spoof_webgl;
 /// Generic spoofs.
 pub mod spoofs;
-
-use aho_corasick::AhoCorasick;
 
 #[cfg(feature = "headers")]
 pub use spoof_headers::emulate_headers;
@@ -48,24 +47,9 @@ use spoofs::{
 pub use http;
 pub use url;
 
-lazy_static::lazy_static! {
-    // Get the latest chrome version as the base to use.
-    pub static ref LATEST_CHROME_FULL_VERSION_FULL: &'static str = CHROME_VERSIONS_BY_MAJOR
-        .get("latest")
-        .and_then(|arr| arr.first().copied())
-        .unwrap_or(&"138.0.7204.92");
-    /// The latest Chrome version major ex: 137.
-    pub static ref BASE_CHROME_VERSION: u32 = LATEST_CHROME_FULL_VERSION_FULL
-        .split('.')
-        .next()
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(138);
-    /// The latest Chrome not a brand version, configurable via the `CHROME_NOT_A_BRAND_VERSION` env variable.
-    pub static ref CHROME_NOT_A_BRAND_VERSION: String = std::env::var("CHROME_NOT_A_BRAND_VERSION")
-        .ok()
-        .and_then(|v| if v.is_empty() { None } else { Some(v) })
-        .unwrap_or("99.0.0.0".into());
+pub use versions::{BASE_CHROME_VERSION, CHROME_NOT_A_BRAND_VERSION, CHROME_VERSIONS_BY_MAJOR, LATEST_CHROME_FULL_VERSION_FULL};
 
+lazy_static::lazy_static! {
     pub static ref MOBILE_PATTERNS: [&'static str; 38] = [
         // Apple
         "iphone", "ipad", "ipod",
@@ -83,11 +67,12 @@ lazy_static::lazy_static! {
     ];
 
     /// Common mobile indicators for user-agent detection.
-    pub static ref MOBILE_MATCHER: AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
+    pub static ref MOBILE_MATCHER: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
         .ascii_case_insensitive(true)
         .build(MOBILE_PATTERNS.as_ref())
         .expect("failed to compile AhoCorasick patterns");
 }
+
 
 /// Returns `true` if the user-agent is likely a mobile browser.
 pub fn is_mobile_user_agent(user_agent: &str) -> bool {
