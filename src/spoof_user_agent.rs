@@ -95,12 +95,18 @@ pub fn smart_spoof_chrome_full_version(ua_major: &str, // e.g. "136"
 ) -> String {
     let mut rng = rng();
 
+    let default_version = if !&crate::CHROME_VERSION_FULL.is_empty() {
+        crate::CHROME_VERSION_FULL.as_str()
+    } else {
+        &crate::LATEST_CHROME_FULL_VERSION_FULL
+    };
+
     // Try the latest full version from "latest" key in PHF
     let latest_versions = CHROME_VERSIONS_BY_MAJOR
         .get("latest")
         .and_then(|arr| arr.first())
         .map(|s| *s)
-        .unwrap_or(&crate::LATEST_CHROME_FULL_VERSION_FULL); // Fallback default (shouldn't hit if PHF is built)
+        .unwrap_or(default_version); // Fallback default (shouldn't hit if PHF is built)
 
     // 75% chance: if ua_major is also the latest, just use the true latest version
     let ua_major = ua_major.split('.').next().unwrap_or(ua_major);
@@ -164,10 +170,16 @@ pub struct HighEntropyUaData {
 pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
     let user_agent: &str = user_agent.as_deref().map_or("", |v| v);
 
+    let default_version = if !&crate::CHROME_VERSION_FULL.is_empty() {
+        crate::CHROME_VERSION_FULL.as_str()
+    } else {
+        &crate::LATEST_CHROME_FULL_VERSION_FULL
+    };
+
     let full_version = user_agent
         .split_whitespace()
         .find_map(|s| s.strip_prefix("Chrome/"))
-        .unwrap_or(&crate::LATEST_CHROME_FULL_VERSION_FULL);
+        .unwrap_or(&default_version);
 
     let mut older_brand = true;
 

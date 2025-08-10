@@ -46,8 +46,8 @@ This crate provides multiple spoofing levels depending on the desired realism an
 You can override the default Chrome versions with the env configs:
 
 ```sh
-CHROME_VERSION=135 
-CHROME_NOT_A_BRAND_VERSION="99.0.0.0" 
+CHROME_NOT_A_BRAND_VERSION="99.0.0.0"
+CHROME_VERSION_FULL=139.0.7258.67
 ```
 
 ## License

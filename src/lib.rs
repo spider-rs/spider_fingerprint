@@ -47,7 +47,10 @@ use spoofs::{
 pub use http;
 pub use url;
 
-pub use versions::{BASE_CHROME_VERSION, CHROME_NOT_A_BRAND_VERSION, CHROME_VERSIONS_BY_MAJOR, LATEST_CHROME_FULL_VERSION_FULL};
+pub use versions::{
+    BASE_CHROME_VERSION, CHROME_NOT_A_BRAND_VERSION, CHROME_VERSIONS_BY_MAJOR, CHROME_VERSION_FULL,
+    LATEST_CHROME_FULL_VERSION_FULL,
+};
 
 lazy_static::lazy_static! {
     pub static ref MOBILE_PATTERNS: [&'static str; 38] = [
@@ -72,7 +75,6 @@ lazy_static::lazy_static! {
         .build(MOBILE_PATTERNS.as_ref())
         .expect("failed to compile AhoCorasick patterns");
 }
-
 
 /// Returns `true` if the user-agent is likely a mobile browser.
 pub fn is_mobile_user_agent(user_agent: &str) -> bool {
