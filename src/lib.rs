@@ -52,6 +52,11 @@ pub use versions::{
     LATEST_CHROME_FULL_VERSION_FULL,
 };
 
+const P_EDG: usize = 0; // "edg/"
+const P_OPR: usize = 1; // "opr/"
+const P_CHR: usize = 2; // "chrome/"
+const P_AND: usize = 3; // "android"
+
 lazy_static::lazy_static! {
     pub static ref MOBILE_PATTERNS: [&'static str; 38] = [
         // Apple
@@ -74,6 +79,73 @@ lazy_static::lazy_static! {
         .ascii_case_insensitive(true)
         .build(MOBILE_PATTERNS.as_ref())
         .expect("failed to compile AhoCorasick patterns");
+
+
+    pub static ref ALLOWED_UA_DATA: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
+            .ascii_case_insensitive(true)
+            .match_kind(aho_corasick::MatchKind::LeftmostFirst)
+            .build(&["edg/", "opr/", "chrome/", "android"])
+            .expect("valid device patterns");
+
+}
+
+#[inline]
+fn parse_major_after(s: &str, end_token: usize) -> Option<u32> {
+    if end_token >= s.len() {
+        return None;
+    }
+    let bytes = s.as_bytes();
+    let mut i = end_token;
+    let mut n: u32 = 0;
+    let mut saw = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if (b'0'..=b'9').contains(&b) {
+            saw = true;
+            n = n.saturating_mul(10) + (b - b'0') as u32;
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    saw.then_some(n)
+}
+
+/// The user-agent allows navigator.userAgentData.getHighEntropyValues
+pub fn ua_allows_gethighentropy(ua: &str) -> bool {
+    let mut seen: u32 = 0;
+    let mut endpos: [Option<usize>; 4] = [None; 4];
+
+    for m in ALLOWED_UA_DATA.find_iter(ua) {
+        let idx = m.pattern().as_usize();
+        if endpos[idx].is_none() {
+            endpos[idx] = Some(m.end());
+            seen |= 1u32 << idx;
+        }
+    }
+
+    let has = |i: usize| (seen & (1u32 << i)) != 0;
+    let is_android = has(P_AND);
+
+    if let Some(end) = endpos[P_EDG] {
+        if is_android {
+            return false;
+        }
+        return parse_major_after(ua, end).map_or(false, |v| v >= 90);
+    }
+    if let Some(end) = endpos[P_OPR] {
+        return parse_major_after(ua, end).map_or(false, |v| {
+            if is_android {
+                v >= 64
+            } else {
+                v >= 76
+            }
+        });
+    }
+    if let Some(end) = endpos[P_CHR] {
+        return parse_major_after(ua, end).map_or(false, |v| v >= 90);
+    }
+    false
 }
 
 /// Returns `true` if the user-agent is likely a mobile browser.
@@ -322,9 +394,10 @@ pub fn emulate_base(
     } else {
         config.agent_os
     };
-    let firefox_agent = config.firefox_agent;
-
-    let spoof_script = if stealth && !firefox_agent && config.user_agent_data.unwrap_or(true) {
+    let spoof_script = if stealth
+        && ua_allows_gethighentropy(user_agent)
+        && config.user_agent_data.unwrap_or(true)
+    {
         &crate::spoof_user_agent::spoof_user_agent_data_high_entropy_values(
             &crate::spoof_user_agent::build_high_entropy_data(&Some(user_agent)),
         )
@@ -506,4 +579,64 @@ pub fn emulate_with_profile(
         evaluate_on_new_document,
         Some(gpu_profile),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ua_allows_gethighentropy;
+
+    #[test]
+    fn ua_green_supported_positive() {
+        // Chrome desktop ≥90
+        let chrome_win = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+            AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
+
+        // Chrome Android ≥90
+        let chrome_android = "Mozilla/5.0 (Linux; Android 11; Pixel 4) \
+            AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.61 Mobile Safari/537.36";
+
+        // Edge (Chromium) desktop ≥90
+        let edge_win = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+            AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.55";
+
+        // Opera desktop ≥76 (has OPR and Chrome base)
+        let opera_win = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+            AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 OPR/76.0.4017.94";
+
+        // Opera Android ≥64
+        let opera_android = "Mozilla/5.0 (Linux; Android 10; SM-G973F) \
+            AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Mobile Safari/537.36 OPR/64.0.2254.62069";
+
+        for ua in [
+            chrome_win,
+            chrome_android,
+            edge_win,
+            opera_win,
+            opera_android,
+        ] {
+            assert!(ua_allows_gethighentropy(ua), "expected supported: {ua}");
+        }
+    }
+
+    #[test]
+    fn ua_green_supported_negative() {
+        // Chrome desktop 89 (below threshold)
+        let chrome_89 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+            AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36";
+
+        // Firefox (no support)
+        let firefox = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:118.0) \
+            Gecko/20100101 Firefox/118.0";
+
+        // Safari desktop (no Chrome token)
+        let safari_mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+            AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+
+        for ua in [chrome_89, firefox, safari_mac] {
+            assert!(
+                !ua_allows_gethighentropy(ua),
+                "expected NOT supported: {ua}"
+            );
+        }
+    }
 }
