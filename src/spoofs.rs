@@ -203,12 +203,21 @@ pub fn spoof_hardware_concurrency(concurrency: usize) -> String {
 }
 
 /// Unified worker hardware and webgl.
-pub fn unified_worker_override(concurrency: usize, vendor: &str, renderer: &str) -> String {
+pub(crate) fn unified_worker_override(
+    concurrency: usize,
+    vendor: &str,
+    renderer: &str,
+    webgl: bool,
+) -> String {
     let escaped_vendor = vendor.replace('\'', "\\'");
     let escaped_renderer = renderer.replace('\'', "\\'");
 
     let hc_worker_script = spoof_hardware_concurrency(concurrency);
-    let gpu_worker_script = hide_webgl_worker_script(&escaped_vendor, &escaped_renderer);
+    let gpu_worker_script = if webgl {
+        hide_webgl_worker_script(&escaped_vendor, &escaped_renderer)
+    } else {
+        Default::default()
+    };
 
     let combined_worker_script = format!(
         r#"try {{ Object.defineProperty(navigator,'hardwareConcurrency', {{ get:()=>{concurrency},enumerable: true, configurable: true }});}} catch(e){{ navigator.hardwareConcurrency = {concurrency}; }} {gpu_script};"#,

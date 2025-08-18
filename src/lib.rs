@@ -187,6 +187,7 @@ fn build_stealth_script_base(
             gpu_profile.hardware_concurrency,
             gpu_profile.webgl_vendor,
             gpu_profile.webgl_renderer,
+            tier != Tier::BasicNoWebglWithGPU,
         )
     } else {
         worker_override(gpu_profile.webgl_vendor, gpu_profile.webgl_renderer)
@@ -218,7 +219,7 @@ fn build_stealth_script_base(
         format!(
             r#"{HIDE_CHROME}{spoof_webgl}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}{PLUGIN_AND_MIMETYPE_SPOOF}"#
         )
-    } else if tier == Tier::BasicNoWebgl {
+    } else if tier == Tier::BasicNoWebgl || tier == Tier::BasicNoWebglWithGPU {
         format!(
             r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_concurrency}{NAVIGATOR_SCRIPT}{PLUGIN_AND_MIMETYPE_SPOOF}"#
         )

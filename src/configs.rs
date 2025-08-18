@@ -9,6 +9,8 @@ pub enum Tier {
     BasicWithConsole,
     /// Basic spoofing without webgl.
     BasicNoWebgl,
+    /// Basic spoofing without webgl only gpu.
+    BasicNoWebglWithGPU,
     /// Basic without unified worker.
     BasicNoWorker,
     /// Mid spoofing.
