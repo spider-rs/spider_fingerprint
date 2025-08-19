@@ -1,3 +1,4 @@
+use crate::versions::BASE_VERSION;
 use crate::{mobile_model_from_user_agent, BASE_CHROME_VERSION, CHROME_VERSIONS_BY_MAJOR};
 use rand::prelude::IndexedRandom;
 use rand::{rng, Rng};
@@ -238,21 +239,48 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(*BASE_CHROME_VERSION);
 
-        let base_mac = 14.6;
+        // 139 plus
+        let base_mac = 15.5;
 
-        let delta = if chrome_major > *BASE_CHROME_VERSION {
-            ((chrome_major - *BASE_CHROME_VERSION) as f32 * 0.1).round()
+        let platform_version = if chrome_major == 138 {
+            "14.6.1".into()
+        } else if chrome_major == 139 {
+            "15.5.0".into()
         } else {
-            0.0
+            let sub_delta = chrome_major < *BASE_CHROME_VERSION;
+
+            let delta = if sub_delta {
+                ((*BASE_CHROME_VERSION - chrome_major) as f32 * 0.1).round()
+            } else if chrome_major > *BASE_CHROME_VERSION {
+                ((chrome_major - *BASE_CHROME_VERSION) as f32 * 0.1).round()
+            } else if chrome_major > BASE_VERSION {
+                let ft = chrome_major - *BASE_CHROME_VERSION;
+                let ft = ft as f32;
+                ft + 0.9
+            } else if *BASE_CHROME_VERSION > BASE_VERSION {
+                let ft = *BASE_CHROME_VERSION - BASE_VERSION;
+                let ft = ft as f32;
+                ft + 0.9
+            } else {
+                0.0
+            };
+
+            let mac_major = if sub_delta {
+                base_mac - delta
+            } else {
+                base_mac + delta
+            };
+
+            if mac_major >= 136.0 {
+                older_brand = false;
+            }
+
+            if mac_major < 15.0 {
+                format!("{:.1}.1", mac_major)
+            } else {
+                format!("{:.1}.0", mac_major)
+            }
         };
-
-        let mac_major = base_mac + delta;
-
-        if mac_major >= 136.0 {
-            older_brand = false;
-        }
-
-        let platform_version = format!("{:.1}.1", mac_major);
 
         ("arm", "".to_string(), "macOS", platform_version, "64")
     } else if user_agent.contains("Linux") {

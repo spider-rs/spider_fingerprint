@@ -1,7 +1,8 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/chrome_versions.rs"));
 
-const CHROME_STATIC_VERSION: &str = "139.0.7258.66";
+pub(crate) const BASE_VERSION: u32 = 139;
+pub(crate) const CHROME_STATIC_VERSION: &str = "139.0.7258.66";
 
 #[cfg(not(feature = "std"))]
 // Fallback if build script wasn't run — define the constant with default data
@@ -38,6 +39,6 @@ lazy_static::lazy_static! {
             .split('.')
         }.next()
         .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(139)
+        .unwrap_or(BASE_VERSION)
     };
 }

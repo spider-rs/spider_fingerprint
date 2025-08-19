@@ -584,7 +584,16 @@ pub fn emulate_with_profile(
 
 #[cfg(test)]
 mod tests {
-    use super::ua_allows_gethighentropy;
+    use super::{emulate, ua_allows_gethighentropy, EmulationConfiguration};
+
+    #[test]
+    fn emulation() {
+        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+        let config = EmulationConfiguration::default();
+        std::env::set_var("CHROME_VERSION_FULL", "139.0.7258.67");
+        let data = emulate(ua, &config, &None, &None);
+        assert!(data.is_some())
+    }
 
     #[test]
     fn ua_green_supported_positive() {
