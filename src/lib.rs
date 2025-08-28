@@ -58,7 +58,8 @@ const P_CHR: usize = 2; // "chrome/"
 const P_AND: usize = 3; // "android"
 
 lazy_static::lazy_static! {
-    pub static ref MOBILE_PATTERNS: [&'static str; 38] = [
+    /// Common mobile device patterns.
+    pub(crate) static ref MOBILE_PATTERNS: [&'static str; 38] = [
         // Apple
         "iphone", "ipad", "ipod",
         // Android
@@ -75,13 +76,13 @@ lazy_static::lazy_static! {
     ];
 
     /// Common mobile indicators for user-agent detection.
-    pub static ref MOBILE_MATCHER: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
+    pub(crate) static ref MOBILE_MATCHER: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
         .ascii_case_insensitive(true)
         .build(MOBILE_PATTERNS.as_ref())
         .expect("failed to compile AhoCorasick patterns");
 
 
-    pub static ref ALLOWED_UA_DATA: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
+    pub(crate) static ref ALLOWED_UA_DATA: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
             .ascii_case_insensitive(true)
             .match_kind(aho_corasick::MatchKind::LeftmostFirst)
             .build(&["edg/", "opr/", "chrome/", "android"])
@@ -195,13 +196,7 @@ fn build_stealth_script_base(
 
     let spoof_concurrency = spoof_hardware_concurrency(gpu_profile.hardware_concurrency);
 
-    let mut gpu_limit = GpuLimits::for_os(os);
-
-    if gpu_profile.webgl_renderer
-        != "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)"
-    {
-        gpu_limit = gpu_limit.with_variation(gpu_profile.hardware_concurrency);
-    }
+    let gpu_limit = GpuLimits::for_os(os).with_variation(gpu_profile.hardware_concurrency);
 
     let spoof_gpu_adapter = build_gpu_request_adapter_script_from_limits(
         gpu_profile.webgpu_vendor,
@@ -223,6 +218,10 @@ fn build_stealth_script_base(
         format!(
             r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_concurrency}{NAVIGATOR_SCRIPT}{PLUGIN_AND_MIMETYPE_SPOOF}"#
         )
+    } else if tier == Tier::HideOnly {
+        format!(r#"{HIDE_CHROME}{HIDE_CONSOLE}{HIDE_WEBDRIVER}"#)
+    } else if tier == Tier::Low {
+        format!(r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_webgl}{spoof_gpu_adapter}{HIDE_WEBDRIVER}"#)
     } else if tier == Tier::Mid {
         format!(
             r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_webgl}{spoof_gpu_adapter}{HIDE_WEBDRIVER}{NAVIGATOR_SCRIPT}{PLUGIN_AND_MIMETYPE_SPOOF}"#

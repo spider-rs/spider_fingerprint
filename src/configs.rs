@@ -13,6 +13,10 @@ pub enum Tier {
     BasicNoWebglWithGPU,
     /// Basic without unified worker.
     BasicNoWorker,
+    /// Hide only the main differences.
+    HideOnly,
+    /// Low spoofing.
+    Low,
     /// Mid spoofing.
     Mid,
     /// Full spoofing.

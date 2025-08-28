@@ -96,18 +96,12 @@ pub fn smart_spoof_chrome_full_version(ua_major: &str, // e.g. "136"
 ) -> String {
     let mut rng = rng();
 
-    let default_version = if !&crate::CHROME_VERSION_FULL.is_empty() {
-        crate::CHROME_VERSION_FULL.as_str()
-    } else {
-        &crate::LATEST_CHROME_FULL_VERSION_FULL
-    };
-
     // Try the latest full version from "latest" key in PHF
     let latest_versions = CHROME_VERSIONS_BY_MAJOR
         .get("latest")
         .and_then(|arr| arr.first())
         .map(|s| *s)
-        .unwrap_or(default_version); // Fallback default (shouldn't hit if PHF is built)
+        .unwrap_or(get_default_version()); // Fallback default (shouldn't hit if PHF is built)
 
     // 75% chance: if ua_major is also the latest, just use the true latest version
     let ua_major = ua_major.split('.').next().unwrap_or(ua_major);
@@ -167,20 +161,23 @@ pub struct HighEntropyUaData {
     pub wow64_ness: bool,
 }
 
+/// Get the default chrome version.
+fn get_default_version() -> &'static str {
+    if !&crate::CHROME_VERSION_FULL.is_empty() {
+        crate::CHROME_VERSION_FULL.as_str()
+    } else {
+        &crate::LATEST_CHROME_FULL_VERSION_FULL
+    }
+}
+
 /// Build the entropy data.
 pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
     let user_agent: &str = user_agent.as_deref().map_or("", |v| v);
 
-    let default_version = if !&crate::CHROME_VERSION_FULL.is_empty() {
-        crate::CHROME_VERSION_FULL.as_str()
-    } else {
-        &crate::LATEST_CHROME_FULL_VERSION_FULL
-    };
-
     let full_version = user_agent
         .split_whitespace()
         .find_map(|s| s.strip_prefix("Chrome/"))
-        .unwrap_or(&default_version);
+        .unwrap_or(&get_default_version());
 
     let mut older_brand = true;
 
@@ -321,6 +318,8 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
             // canary use Not)A;Brand
             brand: if older_brand {
                 "Not-A.Brand"
+            } else if platform_version == "15.5.0" {
+                "Not;A=Brand"
             } else {
                 "Not.A/Brand"
             }
@@ -378,4 +377,15 @@ pub fn spoof_user_agent_data_high_entropy_values(data: &HighEntropyUaData) -> St
         data.platform,
         data.ua_full_version
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_high_entropy_data_test() {
+        let data = build_high_entropy_data(&Some("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"));
+        assert!(data.platform == "macOS")
+    }
 }
