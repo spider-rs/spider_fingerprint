@@ -241,7 +241,7 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
 
         let platform_version = if chrome_major == 138 {
             "14.6.1".into()
-        } else if chrome_major == 139 {
+        } else if chrome_major == 139 || chrome_major == 140 {
             "15.5.0".into()
         } else {
             let sub_delta = chrome_major < *BASE_CHROME_VERSION;
@@ -386,6 +386,7 @@ mod tests {
     #[test]
     fn build_high_entropy_data_test() {
         let data = build_high_entropy_data(&Some("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"));
-        assert!(data.platform == "macOS")
+        assert!(data.platform == "macOS");
+        assert!(data.platform_version == "15.5.0");
     }
 }

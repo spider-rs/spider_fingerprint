@@ -15,6 +15,10 @@ pub enum Tier {
     BasicNoWorker,
     /// Hide only the main differences.
     HideOnly,
+    /// Hide only the main differences with the console enabled.
+    HideOnlyWithConsole,
+    /// Hide only window.chrome.
+    HideOnlyChrome,
     /// Low spoofing.
     Low,
     /// Mid spoofing.
@@ -35,7 +39,7 @@ impl Tier {
     }
 }
 
-/// The user agent types of profiles we support for stealth.
+/// The user agent type of profiles.
 #[derive(PartialEq, Clone, Copy, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AgentOs {

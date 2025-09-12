@@ -8,7 +8,7 @@ use http::{HeaderMap, HeaderName};
 use rand::{rng, Rng};
 
 use crate::configs::AgentOs;
-use crate::get_agent_os;
+use crate::{get_agent_os, BROWSER_MATCH};
 
 lazy_static::lazy_static! {
     /// The brand version of google chrome. Use the env var 'NOT_A_BRAND_VERSION'.
@@ -182,6 +182,8 @@ enum BrowserKind {
     Safari,
     /// Edge
     Edge,
+    /// Opera
+    Opera,
     /// Other
     Other,
 }
@@ -294,6 +296,8 @@ pub fn emulate_headers(
         BrowserKind::Safari
     } else if user_agent.contains("Edge/") {
         BrowserKind::Edge
+    } else if user_agent.contains("Opera/") {
+        BrowserKind::Opera
     } else {
         BrowserKind::Other
     };
@@ -353,7 +357,7 @@ pub fn emulate_headers(
     }
 
     match browser {
-        BrowserKind::Chrome => {
+        BrowserKind::Chrome | BrowserKind::Opera => {
             let agent_os = get_agent_os(user_agent);
 
             let linux_agent = agent_os == AgentOs::Linux;
@@ -783,16 +787,37 @@ pub fn rewrite_headers_to_title_case(headers: &mut std::collections::HashMap<Str
 }
 
 /// Detect the browser type.
-fn detect_browser(ua: &str) -> &'static str {
-    let ua = ua.to_ascii_lowercase();
-    if ua.contains("chrome") && !ua.contains("edge") {
+/// Order of preference: chrome -> safari -> edge -> firefox -> opera
+pub fn detect_browser(ua: &str) -> &'static str {
+    let mut edge = false;
+    let mut opera = false;
+    let mut firefox = false;
+    let mut chrome = false;
+    let mut safari = false;
+
+    for m in BROWSER_MATCH.find_iter(ua) {
+        match m.pattern().as_u32() {
+            0 | 1 | 2 => edge = true,    // edg..., edge/
+            3 | 4 | 5 => opera = true,   // opr/opera/opios
+            6 | 7 => firefox = true,     // firefox/fxios
+            8 | 9 | 10 => chrome = true, // chrome/, crios, chromium
+            11 => safari = true,         // safari
+            _ => (),
+        }
+    }
+
+    if chrome && !edge && !opera {
         "chrome"
-    } else if ua.contains("safari") && !ua.contains("chrome") {
+    } else if safari && !chrome && !edge && !opera && !firefox {
         "safari"
-    } else if ua.contains("firefox") {
+    } else if edge {
+        "edge"
+    } else if firefox {
         "firefox"
+    } else if opera {
+        "opera"
     } else {
-        "chrome" // default fallback
+        "chrome"
     }
 }
 
@@ -998,5 +1023,95 @@ mod tests {
 
         // Check that empty or default values handled gracefully without crashing
         assert!(!headers.is_empty()); // Should produce something safely without panics
+    }
+
+    #[test]
+    fn detect_browser_matrix() {
+        let cases: &[(&str, &str, &str)] = &[
+            // Chrome
+            (
+                "chrome_desktop",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+              (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+                "chrome",
+            ),
+            (
+                "chrome_ios",
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) \
+              AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0.0.0 \
+              Mobile/15E148 Safari/604.1",
+                "chrome",
+            ),
+            // Safari (ensure no Chrome token present)
+            (
+                "safari_macos",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 \
+              (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+                "safari",
+            ),
+            // Edge
+            (
+                "edge_desktop",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+              (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+                "edge",
+            ),
+            (
+                "edge_ios",
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) \
+              AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/124.0 \
+              Mobile/15E148 Safari/604.1",
+                "edge",
+            ),
+            // Firefox
+            (
+                "firefox_desktop",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) \
+              Gecko/20100101 Firefox/126.0",
+                "firefox",
+            ),
+            (
+                "firefox_ios",
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) \
+              AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/126.0 \
+              Mobile/15E148 Safari/605.1.15",
+                "firefox",
+            ),
+            // Opera
+            (
+                "opera_desktop",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+              (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0",
+                "opera",
+            ),
+            (
+                "opera_ios",
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) \
+              AppleWebKit/605.1.15 (KHTML, like Gecko) OPiOS/4.1.0 \
+              Mobile/15E148 Safari/9537.53",
+                "opera",
+            ),
+            // Fallback / unknown -> chrome
+            (
+                "unknown",
+                "SomeAgent/1.0 (+https://example.test) FooBar/9.9",
+                "chrome",
+            ),
+        ];
+
+        for (name, ua, expect) in cases {
+            let got = detect_browser(ua);
+            assert_eq!(
+                got, *expect,
+                "case `{}` failed: ua=`{}` expected=`{}` got=`{}`",
+                name, ua, expect, got
+            );
+        }
+    }
+
+    #[test]
+    fn detect_browser_case_insensitive() {
+        let ua = "moZILLa/5.0 (WiNdOwS) CHROME/123.0 SAFARI/537.36";
+        assert_eq!(detect_browser(ua), "chrome");
     }
 }
