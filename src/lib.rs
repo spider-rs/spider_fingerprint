@@ -54,6 +54,23 @@ pub use versions::{
 
 use crate::spoofs::PATCH_SPEECH_SYNTHESIS;
 
+/// The kind of browser.
+#[derive(PartialEq, Eq)]
+pub enum BrowserKind {
+    /// Chrome
+    Chrome,
+    /// Firefox
+    Firefox,
+    /// Safari
+    Safari,
+    /// Edge
+    Edge,
+    /// Opera
+    Opera,
+    /// Other
+    Other,
+}
+
 const P_EDG: usize = 0; // "edg/"
 const P_OPR: usize = 1; // "opr/"
 const P_CHR: usize = 2; // "chrome/"
@@ -101,6 +118,62 @@ lazy_static::lazy_static! {
             ])
             .expect("valid device patterns");
 
+}
+
+/// Detect the browser type.
+/// Order of preference: chrome -> safari -> edge -> firefox -> opera
+pub fn detect_browser(ua: &str) -> &'static str {
+    let mut edge = false;
+    let mut opera = false;
+    let mut firefox = false;
+    let mut chrome = false;
+    let mut safari = false;
+
+    for m in BROWSER_MATCH.find_iter(ua) {
+        match m.pattern().as_u32() {
+            0 | 1 | 2 => edge = true,    // edg..., edge/
+            3 | 4 | 5 => opera = true,   // opr/opera/opios
+            6 | 7 => firefox = true,     // firefox/fxios
+            8 | 9 | 10 => chrome = true, // chrome/, crios, chromium
+            11 => safari = true,         // safari
+            _ => (),
+        }
+    }
+
+    if chrome && !edge && !opera {
+        "chrome"
+    } else if safari && !chrome && !edge && !opera && !firefox {
+        "safari"
+    } else if edge {
+        "edge"
+    } else if firefox {
+        "firefox"
+    } else if opera {
+        "opera"
+    } else {
+        "unknown"
+    }
+}
+
+/// Detect the browser type to BrowserKind.
+/// Order of preference: chrome -> safari -> edge -> firefox -> opera
+pub fn detect_browser_kind(ua: &str) -> BrowserKind {
+    let s = detect_browser(ua);
+    if s.eq_ignore_ascii_case("chrome") {
+        BrowserKind::Chrome
+    } else if s.eq_ignore_ascii_case("safari") {
+        BrowserKind::Safari
+    } else if s.eq_ignore_ascii_case("edge") {
+        BrowserKind::Edge
+    } else if s.eq_ignore_ascii_case("firefox") {
+        BrowserKind::Firefox
+    } else if s.eq_ignore_ascii_case("opera") {
+        BrowserKind::Opera
+    } else if s.eq_ignore_ascii_case("unknown") {
+        BrowserKind::Other
+    } else {
+        BrowserKind::Chrome
+    }
 }
 
 #[inline]
@@ -186,15 +259,19 @@ fn build_stealth_script_base(
     tier: Tier,
     os: AgentOs,
     concurrency: bool,
+    browser: BrowserKind,
 ) -> String {
     use crate::spoofs::{
         spoof_hardware_concurrency, unified_worker_override, worker_override, HIDE_CHROME,
         HIDE_CONSOLE, HIDE_WEBDRIVER, NAVIGATOR_SCRIPT, PLUGIN_AND_MIMETYPE_SPOOF,
-        PLUGIN_AND_MIMETYPE_SPOOF_CHROME,
+        PLUGIN_AND_MIMETYPE_SPOOF_CHROME, REMOVE_CHROME,
     };
 
     // tmp used for chrome only os checking.
-    let chrome = os != AgentOs::Unknown;
+    let chrome = browser == BrowserKind::Chrome
+        || browser == BrowserKind::Opera
+        || browser == BrowserKind::Edge
+        || os != AgentOs::Unknown;
 
     let spoof_worker = if tier == Tier::BasicNoWorker {
         Default::default()
@@ -203,7 +280,7 @@ fn build_stealth_script_base(
             gpu_profile.hardware_concurrency,
             gpu_profile.webgl_vendor,
             gpu_profile.webgl_renderer,
-            tier != Tier::BasicNoWebglWithGPU,
+            !(tier == Tier::BasicNoWebglWithGPU || tier == Tier::BasicNoWebglWithGPUcWithConsole),
         )
     } else {
         worker_override(gpu_profile.webgl_vendor, gpu_profile.webgl_renderer)
@@ -221,49 +298,54 @@ fn build_stealth_script_base(
         &gpu_limit,
     );
 
-    let plugin_spoof = if chrome {
-        PLUGIN_AND_MIMETYPE_SPOOF_CHROME
+    let (plugin_spoof, chrome_spoof) = if chrome {
+        (PLUGIN_AND_MIMETYPE_SPOOF_CHROME, HIDE_CHROME)
     } else {
-        PLUGIN_AND_MIMETYPE_SPOOF
+        (PLUGIN_AND_MIMETYPE_SPOOF, REMOVE_CHROME)
     };
 
     match tier {
         Tier::Basic | Tier::BasicNoWorker => {
             format!(
-                r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_worker}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
+                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
             )
         }
         Tier::BasicWithConsole => {
             format!(
-                r#"{HIDE_CHROME}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
+                r#"{chrome_spoof}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
             )
         }
         Tier::BasicNoWebgl | Tier::BasicNoWebglWithGPU => {
             format!(
-                r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
+                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
+            )
+        }
+        Tier::BasicNoWebglWithGPUcWithConsole => {
+            format!(
+                r#"{chrome_spoof}{spoof_worker}{spoof_concurrency}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
             )
         }
         Tier::HideOnly => {
-            format!(r#"{HIDE_CHROME}{HIDE_CONSOLE}{HIDE_WEBDRIVER}"#)
+            format!(r#"{chrome_spoof}{HIDE_CONSOLE}{HIDE_WEBDRIVER}"#)
         }
         Tier::HideOnlyWithConsole => {
-            format!(r#"{HIDE_CHROME}{HIDE_WEBDRIVER}"#)
+            format!(r#"{chrome_spoof}{HIDE_WEBDRIVER}"#)
         }
-        Tier::HideOnlyChrome => HIDE_CHROME.into(),
+        Tier::HideOnlyChrome => chrome_spoof.into(),
         Tier::Low => {
             format!(
-                r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}"#
+                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}"#
             )
         }
         Tier::Mid => {
             format!(
-                r#"{HIDE_CHROME}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
+                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}{NAVIGATOR_SCRIPT}{plugin_spoof}"#
             )
         }
         Tier::Full => {
             let spoof_gpu = build_gpu_spoof_script_wgsl(gpu_profile.canvas_format);
 
-            format!("{HIDE_CHROME}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}{NAVIGATOR_SCRIPT}{plugin_spoof}{spoof_gpu}")
+            format!("{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}{NAVIGATOR_SCRIPT}{plugin_spoof}{spoof_gpu}")
         }
         _ => Default::default(),
     }
@@ -272,13 +354,13 @@ fn build_stealth_script_base(
 /// Generate the initial stealth script to send in one command.
 pub fn build_stealth_script(tier: Tier, os: AgentOs) -> String {
     let gpu_profile = select_random_gpu_profile(os);
-    build_stealth_script_base(gpu_profile, tier, os, true)
+    build_stealth_script_base(gpu_profile, tier, os, true, BrowserKind::Other)
 }
 
 /// Generate the initial stealth script to send in one command without hardware concurrency.
 pub fn build_stealth_script_no_concurrency(tier: Tier, os: AgentOs) -> String {
     let gpu_profile = select_random_gpu_profile(os);
-    build_stealth_script_base(gpu_profile, tier, os, false)
+    build_stealth_script_base(gpu_profile, tier, os, false, BrowserKind::Other)
 }
 
 /// Generate the initial stealth script to send in one command and profile.
@@ -287,7 +369,27 @@ pub fn build_stealth_script_with_profile(
     tier: Tier,
     os: AgentOs,
 ) -> String {
-    build_stealth_script_base(gpu_profile, tier, os, true)
+    build_stealth_script_base(gpu_profile, tier, os, true, BrowserKind::Other)
+}
+
+/// Generate the initial stealth script to send in one command and profile.
+pub fn build_stealth_script_with_profile_and_browser(
+    gpu_profile: &'static GpuProfile,
+    tier: Tier,
+    os: AgentOs,
+    browser: BrowserKind,
+) -> String {
+    build_stealth_script_base(gpu_profile, tier, os, true, browser)
+}
+
+/// Generate the initial stealth script to send in one command without hardware concurrency and profile.
+pub fn build_stealth_script_no_concurrency_with_profile_and_browser(
+    gpu_profile: &'static GpuProfile,
+    tier: Tier,
+    os: AgentOs,
+    browser: BrowserKind,
+) -> String {
+    build_stealth_script_base(gpu_profile, tier, os, false, browser)
 }
 
 /// Generate the initial stealth script to send in one command without hardware concurrency and profile.
@@ -296,7 +398,7 @@ pub fn build_stealth_script_no_concurrency_with_profile(
     tier: Tier,
     os: AgentOs,
 ) -> String {
-    build_stealth_script_base(gpu_profile, tier, os, false)
+    build_stealth_script_base(gpu_profile, tier, os, false, BrowserKind::Other)
 }
 
 /// Generate the hide plugins script.
@@ -407,8 +509,19 @@ impl EmulationConfiguration {
 
 /// Join the scrips pre-allocated.
 pub fn join_scripts<I: IntoIterator<Item = impl AsRef<str>>>(parts: I) -> String {
-    // Heuristically preallocate some capacity (tweak as needed for your use-case).
     let mut script = String::with_capacity(4096);
+    for part in parts {
+        script.push_str(part.as_ref());
+    }
+    script
+}
+
+/// Join the scrips pre-allocated.
+pub fn join_scripts_with_capacity<I: IntoIterator<Item = impl AsRef<str>>>(
+    parts: I,
+    capacity: usize,
+) -> String {
+    let mut script = String::with_capacity(capacity);
     for part in parts {
         script.push_str(part.as_ref());
     }
@@ -504,11 +617,21 @@ pub fn emulate_base(
     };
 
     let gpu_profile = gpu_profile.unwrap_or(select_random_gpu_profile(agent_os));
-
+    let browser_kind = detect_browser_kind(user_agent);
     let st = if config.hardware_concurrency {
-        crate::build_stealth_script_with_profile(gpu_profile, config.tier, agent_os)
+        crate::build_stealth_script_with_profile_and_browser(
+            gpu_profile,
+            config.tier,
+            agent_os,
+            browser_kind,
+        )
     } else {
-        crate::build_stealth_script_no_concurrency_with_profile(gpu_profile, config.tier, agent_os)
+        crate::build_stealth_script_no_concurrency_with_profile_and_browser(
+            gpu_profile,
+            config.tier,
+            agent_os,
+            browser_kind,
+        )
     };
 
     let touch_screen_script = if config.touch_screen {
@@ -517,29 +640,14 @@ pub fn emulate_base(
         Default::default()
     };
 
-    // Final combined script to inject
-    let merged_script = if let Some(script) = evaluate_on_new_document.as_deref() {
-        let mut b = join_scripts([
-            &fp_script,
-            spoof_speech_syn,
-            &spoof_user_agent_data,
-            disable_dialogs,
-            &screen_spoof,
-            SPOOF_NOTIFICATIONS,
-            SPOOF_PERMISSIONS_QUERY,
-            &spoof_media_codecs_script(),
-            &touch_screen_script,
-            &spoof_media_labels_script(agent_os),
-            &spoof_history_length_script(rand::rng().random_range(1..=6)),
-            &st,
-            &wrap_eval_script(script),
-        ]);
-        b.push_str(&wrap_eval_script(script));
+    let eval_script = if let Some(script) = evaluate_on_new_document.as_deref() {
+        wrap_eval_script(script)
+    } else {
+        Default::default()
+    };
 
-        Some(b)
-    } else if stealth || fingerprint {
-        Some(join_scripts([
-            &fp_script,
+    let stealth_scripts = if stealth {
+        join_scripts([
             spoof_speech_syn,
             &spoof_user_agent_data,
             disable_dialogs,
@@ -551,7 +659,19 @@ pub fn emulate_base(
             &spoof_media_labels_script(agent_os),
             &spoof_history_length_script(rand::rng().random_range(1..=6)),
             &st,
-        ]))
+        ])
+    } else {
+        Default::default()
+    };
+
+    // Final combined script to inject
+    let merged_script = if stealth || fingerprint {
+        Some(join_scripts_with_capacity(
+            [&fp_script, &stealth_scripts, &eval_script],
+            fp_script.capacity() + stealth_scripts.capacity() + eval_script.capacity(),
+        ))
+    } else if !eval_script.is_empty() {
+        Some(eval_script)
     } else {
         None
     };

@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
+use crate::configs::AgentOs;
+use crate::BrowserKind;
+use crate::{detect_browser, detect_browser_kind, get_agent_os};
 use http::header::{
     HeaderValue, ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, CACHE_CONTROL, CONNECTION, HOST, PRAGMA,
     REFERER, UPGRADE_INSECURE_REQUESTS, USER_AGENT,
 };
 use http::{HeaderMap, HeaderName};
 use rand::{rng, Rng};
-
-use crate::configs::AgentOs;
-use crate::{get_agent_os, BROWSER_MATCH};
 
 lazy_static::lazy_static! {
     /// The brand version of google chrome. Use the env var 'NOT_A_BRAND_VERSION'.
@@ -171,23 +171,6 @@ fn get_accept_language() -> &'static str {
     }
 }
 
-/// The kind of browser.
-#[derive(PartialEq, Eq)]
-enum BrowserKind {
-    /// Chrome
-    Chrome,
-    /// Firefox
-    Firefox,
-    /// Safari
-    Safari,
-    /// Edge
-    Edge,
-    /// Opera
-    Opera,
-    /// Other
-    Other,
-}
-
 #[derive(Clone)]
 /// Header key value.
 pub enum HeaderKey {
@@ -288,19 +271,7 @@ pub fn emulate_headers(
         return Default::default();
     }
 
-    let browser = if user_agent.contains("Chrome/") {
-        BrowserKind::Chrome
-    } else if user_agent.contains("Firefox/") {
-        BrowserKind::Firefox
-    } else if user_agent.contains("Safari/") {
-        BrowserKind::Safari
-    } else if user_agent.contains("Edge/") {
-        BrowserKind::Edge
-    } else if user_agent.contains("Opera/") {
-        BrowserKind::Opera
-    } else {
-        BrowserKind::Other
-    };
+    let browser = detect_browser_kind(user_agent);
 
     let cap = if browser == BrowserKind::Chrome {
         31
@@ -784,41 +755,6 @@ pub fn rewrite_headers_to_title_case(headers: &mut std::collections::HashMap<Str
     }
 
     *headers = new_headers;
-}
-
-/// Detect the browser type.
-/// Order of preference: chrome -> safari -> edge -> firefox -> opera
-pub fn detect_browser(ua: &str) -> &'static str {
-    let mut edge = false;
-    let mut opera = false;
-    let mut firefox = false;
-    let mut chrome = false;
-    let mut safari = false;
-
-    for m in BROWSER_MATCH.find_iter(ua) {
-        match m.pattern().as_u32() {
-            0 | 1 | 2 => edge = true,    // edg..., edge/
-            3 | 4 | 5 => opera = true,   // opr/opera/opios
-            6 | 7 => firefox = true,     // firefox/fxios
-            8 | 9 | 10 => chrome = true, // chrome/, crios, chromium
-            11 => safari = true,         // safari
-            _ => (),
-        }
-    }
-
-    if chrome && !edge && !opera {
-        "chrome"
-    } else if safari && !chrome && !edge && !opera && !firefox {
-        "safari"
-    } else if edge {
-        "edge"
-    } else if firefox {
-        "firefox"
-    } else if opera {
-        "opera"
-    } else {
-        "chrome"
-    }
 }
 
 /// Real header order map.
