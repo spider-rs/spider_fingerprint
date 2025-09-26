@@ -100,4 +100,40 @@ pub static GPU_PROFILES_MAC: &[GpuProfile] = &[
         canvas_format: "bgra8unorm",
         hardware_concurrency: 16,
     },
+    // Apple M4 (base model)
+    GpuProfile {
+        webgl_vendor: "Google Inc. (Apple)",
+        webgl_renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 8,
+    },
+    // Apple M4 Pro
+    GpuProfile {
+        webgl_vendor: "Google Inc. (Apple)",
+        webgl_renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 12,
+    },
+    // Apple M4 Max
+    GpuProfile {
+        webgl_vendor: "Google Inc. (Apple)",
+        webgl_renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 16,
+    },
+    // Apple M4 Ultra (e.g., Mac Studio / Mac Pro)
+    GpuProfile {
+        webgl_vendor: "Google Inc. (Apple)",
+        webgl_renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Ultra, Unspecified Version)",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 24,
+    },
 ];

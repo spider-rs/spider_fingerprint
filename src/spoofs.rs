@@ -15,7 +15,7 @@ pub const HIDE_CONSOLE: &str =
 pub const DISABLE_DIALOGS: &str  = "(()=>{const a=window.alert.toString(),c=window.confirm.toString(),p=window.prompt.toString();window.alert=function alert(){};Object.defineProperty(window.alert,'toString',{value:()=>a,configurable:true});window.confirm=function confirm(){return true};Object.defineProperty(window.confirm,'toString',{value:()=>c,configurable:true});window.prompt=function prompt(){return ''};Object.defineProperty(window.prompt,'toString',{value:()=>p,configurable:true});})();";
 
 /// Hide the webdriver from being enabled. You should not need this if you use the cli args to launch chrome - disabled-features=AutomationEnabled
-pub const HIDE_WEBDRIVER: &str = r#"(()=>{const r=Function.prototype.toString,g=()=>false;Function.prototype.toString=function(){return this===g?'function get webdriver() { [native code] }':r.call(this)};Object.defineProperty(Navigator.prototype,'webdriver',{get:g,enumerable:false,configurable:true})})();"#;
+pub const HIDE_WEBDRIVER: &str = r#"(()=>{if(!navigator.webdriver){return}; const r=Function.prototype.toString,g=()=>false;Function.prototype.toString=function(){return this===g?'function get webdriver() { [native code] }':r.call(this)};Object.defineProperty(Navigator.prototype,'webdriver',{get:g,enumerable:false,configurable:true})})();"#;
 
 /// Navigator include pdfViewerEnabled.
 pub const NAVIGATOR_SCRIPT: &str = r#"(()=>{const nativeGet=new Function("return true");Object.defineProperty(nativeGet,'toString',{value:()=>"function get pdfViewerEnabled() { [native code] }"});Object.defineProperty(Navigator.prototype,"pdfViewerEnabled",{get:nativeGet,configurable:!0});})();"#;
