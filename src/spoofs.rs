@@ -55,8 +55,8 @@ pub fn spoof_media_labels_script(agent_os: AgentOs) -> String {
     let camera_label = match agent_os {
         AgentOs::Mac => "FaceTime HD Camera",
         AgentOs::Windows => "Integrated Webcam",
-        AgentOs::Linux | AgentOs::Unknown => "Integrated Camera",
-        AgentOs::Android | AgentOs::IPhone => "Front Camera",
+        AgentOs::Linux | AgentOs::Unknown | AgentOs::ChromeOS => "Integrated Camera",
+        AgentOs::Android | AgentOs::IPhone | AgentOs::IPad => "Front Camera",
     };
 
     format!(
@@ -118,14 +118,14 @@ pub fn spoof_screen_script_rng<R: Rng>(
     let simulate_hdr = screen_width >= 2560 && device_pixel_ratio >= 2.0;
 
     let color_depth = match agent_os {
-        AgentOs::Mac | AgentOs::Windows | AgentOs::Linux | AgentOs::Unknown => {
+        AgentOs::Mac | AgentOs::Windows | AgentOs::Linux | AgentOs::Unknown | AgentOs::ChromeOS => {
             if simulate_hdr {
                 30
             } else {
                 24
             }
         }
-        AgentOs::Android | AgentOs::IPhone => 24,
+        AgentOs::Android | AgentOs::IPhone | AgentOs::IPad => 24,
     };
 
     format!(
@@ -172,7 +172,8 @@ pub fn resolve_dpr(
         } else {
             match platform {
                 AgentOs::Mac | AgentOs::Linux | AgentOs::Windows | AgentOs::Unknown => 1.0,
-                AgentOs::Android | AgentOs::IPhone => 2.0, // can be 3.0+ on some phones, but 2.0 is safe default
+                AgentOs::Android | AgentOs::IPhone | AgentOs::IPad => 2.0, // can be 3.0+ on some phones, but 2.0 is safe default
+                AgentOs::ChromeOS => 1.6,
             }
         }
     })

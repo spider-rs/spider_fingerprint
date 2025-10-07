@@ -49,13 +49,32 @@ pub enum AgentOs {
     Linux,
     /// Mac.
     Mac,
-    /// Iphone
+    /// IPhone.
     IPhone,
+    /// Ipad.
+    IPad,
     /// Windows.
     Windows,
     /// Android.
     Android,
+    /// Chrome OS
+    ChromeOS,
     #[default]
     /// Unknown.
     Unknown,
+}
+
+impl AgentOs {
+    /// Agent Operating system to string
+    pub fn agent_os_string(&self) -> &'static str {
+        match &self {
+            AgentOs::Android => "Android",
+            AgentOs::IPhone | AgentOs::IPad => "iOS",
+            AgentOs::Mac => "macOS",
+            AgentOs::Windows => "Windows",
+            AgentOs::Linux => "Linux",
+            AgentOs::ChromeOS => "Chrome OS",
+            AgentOs::Unknown => "Unknown",
+        }
+    }
 }

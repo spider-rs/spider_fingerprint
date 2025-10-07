@@ -328,7 +328,7 @@ pub fn emulate_headers(
     }
 
     match browser {
-        BrowserKind::Chrome | BrowserKind::Opera => {
+        BrowserKind::Chrome | BrowserKind::Opera | BrowserKind::Brave => {
             let agent_os = get_agent_os(user_agent);
 
             let linux_agent = agent_os == AgentOs::Linux;
@@ -493,7 +493,7 @@ pub fn emulate_headers(
             );
 
             if extensive || linux_agent {
-                insert_or_default!("Dpr", HeaderValue::from_static("2"));
+                insert_or_default!("Sec-CH-DPR", HeaderValue::from_static("2"));
                 if let Some(vp) = viewport {
                     let width = if vp.width > 0 {
                         format!("{}", vp.width)
@@ -509,6 +509,8 @@ pub fn emulate_headers(
                     };
 
                     if let Ok(width) = HeaderValue::from_str(&width) {
+                        // wait for announcements - maybe 160
+                        // insert_or_default!("Sec-CH-Viewport-Width", width);
                         insert_or_default!("Viewport-Width", width);
                     }
                 }
@@ -768,11 +770,11 @@ pub static HEADER_ORDER_MAP: phf::Map<&'static str, &'static [&'static str]> = p
         "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site",
     ],
     "chrome" => &[
-        "Content-Type",
-        "Content-Length",
         "Host",
-        "Pragma",
+        "Connection",
+        "Content-Length",
         "Cache-Control",
+        "Pragma",
         "Device-Memory",
         "DPR",
         "Viewport-Width",
@@ -784,12 +786,13 @@ pub static HEADER_ORDER_MAP: phf::Map<&'static str, &'static [&'static str]> = p
         "Sec-CH-UA-Full-Version",
         "Sec-CH-UA-Arch",
         "sec-ch-ua-platform",
+        "Origin",
+        "Content-Type",
         "Sec-CH-UA-Platform-Version",
         "Sec-CH-UA-Model",
         "Sec-CH-Prefers-Color-Scheme",
         "Sec-CH-Prefers-Reduced-Motion",
         "Upgrade-Insecure-Requests",
-        "Origin",
         "User-Agent",
         "Accept",
         "Sec-Fetch-Site",
@@ -823,6 +826,7 @@ pub static HEADER_ORDER_MAP: phf::Map<&'static str, &'static [&'static str]> = p
         "accept-encoding",
         "accept-language",
         "cookie",
+        "priority"
     ],
     "firefox" => &[
         "Host", "User-Agent", "Accept", "Accept-Language", "Accept-Encoding", "Content-Type",
@@ -832,6 +836,51 @@ pub static HEADER_ORDER_MAP: phf::Map<&'static str, &'static [&'static str]> = p
         "accept-language", "accept-encoding", "content-type", "content-length", "origin",
         "referer", "cookie", "upgrade-insecure-requests", "sec-fetch-dest", "sec-fetch-mode",
         "sec-fetch-site", "sec-fetch-user", "te",
+    ],
+    "edge" => &[
+        "Host",
+        "Connection",
+        "Content-Length",
+        "Cache-Control",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+        "Origin",
+        "Content-Type",
+        "Upgrade-Insecure-Requests",
+        "User-Agent",
+        "Accept",
+        "Sec-Fetch-Site",
+        "Sec-Fetch-Mode",
+        "Sec-Fetch-User",
+        "Sec-Fetch-Dest",
+        "Referer",
+        "Accept-Encoding",
+        "Accept-Language",
+        "Cookie",
+        ":method",
+        ":authority",
+        ":scheme",
+        ":path",
+        "content-length",
+        "cache-control",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+        "origin",
+        "content-type",
+        "upgrade-insecure-requests",
+        "user-agent",
+        "accept",
+        "sec-fetch-site",
+        "sec-fetch-mode",
+        "sec-fetch-user",
+        "sec-fetch-dest",
+        "referer",
+        "accept-encoding",
+        "accept-language",
+        "cookie",
+        "priority"
     ],
 };
 
@@ -1031,7 +1080,7 @@ mod tests {
             (
                 "unknown",
                 "SomeAgent/1.0 (+https://example.test) FooBar/9.9",
-                "chrome",
+                "unknown",
             ),
         ];
 

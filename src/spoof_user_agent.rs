@@ -108,7 +108,7 @@ pub fn smart_spoof_chrome_full_version(ua_major: &str, // e.g. "136"
     let same_major = latest_versions.starts_with(ua_major);
 
     if same_major && rng.random_bool(0.75) {
-        return latest_versions.to_string();
+        return crate::versions::random_version_based_on_default_version_base(&mut rng);
     }
 
     // Otherwise, pick a random known-good version in the given major
@@ -162,7 +162,7 @@ pub struct HighEntropyUaData {
 }
 
 /// Get the default chrome version.
-fn get_default_version() -> &'static str {
+pub fn get_default_version() -> &'static str {
     if !&crate::CHROME_VERSION_FULL.is_empty() {
         crate::CHROME_VERSION_FULL.as_str()
     } else {
@@ -241,7 +241,7 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
 
         let platform_version = if chrome_major == 138 {
             "14.6.1".into()
-        } else if chrome_major == 139 || chrome_major == 140 {
+        } else if (139..=141).contains(&chrome_major) {
             "15.5.0".into()
         } else {
             let sub_delta = chrome_major < *BASE_CHROME_VERSION;
@@ -367,7 +367,7 @@ pub fn spoof_user_agent_data_high_entropy_values(data: &HighEntropyUaData) -> St
         .join(",");
 
     format!(
-        r#"(()=>{{if(typeof NavigatorUAData==='undefined')window.NavigatorUAData=function NavigatorUAData(){{}};const p=NavigatorUAData.prototype,v=Object.create(p),d={{architecture:'{}',bitness:'{}',model:'{}',platformVersion:'{}',fullVersionList:[{}],brands:[{}],mobile:!1,platform:'{}'}};Object.defineProperties(v,{{brands:{{value:d.brands,enumerable:true}},mobile:{{value:d.mobile,enumerable:true}},platform:{{value:d.platform,enumerable:true}}}});Object.defineProperties(p,{{brands:{{get:function brands(){{return this.brands}}}},mobile:{{get:function mobile(){{return this.mobile}}}},platform:{{get:function platform(){{return this.platform}}}}}});function getHighEntropyValues(keys){{return Promise.resolve(Object.assign({{brands:d.brands,mobile:d.mobile,platform:d.platform,uaFullVersion:'{}'}},...keys.map(k=>k in d?{{[k]:d[k]}}:{{}})));}}Object.defineProperty(p,'getHighEntropyValues',{{value:getHighEntropyValues}});function toJSON(){{return{{brands:this.brands,mobile:this.mobile,platform:this.platform}}}}Object.defineProperty(p,'toJSON',{{value:toJSON}});const f=()=>v;Object.defineProperty(f,'toString',{{value:()=>`function get userAgentData() {{ [native code] }}`}});Object.defineProperty(Navigator.prototype,'userAgentData',{{get:f,configurable:!0}});}})();"#,
+        r###"(()=>{{if(typeof NavigatorUAData==='undefined')window.NavigatorUAData=function NavigatorUAData(){{}};const p=NavigatorUAData.prototype,v=Object.create(p),d={{architecture:'{}',bitness:'{}',model:'{}',platformVersion:'{}',fullVersionList:[{}],brands:[{}],mobile:!1,platform:'{}'}};Object.defineProperties(v,{{brands:{{value:d.brands,enumerable:true}},mobile:{{value:d.mobile,enumerable:true}},platform:{{value:d.platform,enumerable:true}}}});Object.defineProperties(p,{{brands:{{get:function brands(){{return this.brands}}}},mobile:{{get:function mobile(){{return this.mobile}}}},platform:{{get:function platform(){{return this.platform}}}}}});function getHighEntropyValues(keys){{keys=Array.isArray(keys)?keys:[];var out={{}};for(var i=0;i<keys.length;i++){{var k=keys[i];if(k==='architecture'||k==='bitness'||k==='model'||k==='platformVersion'||k==='uaFullVersion'||k==='fullVersionList'){{out[k]=(k==='uaFullVersion'?'{}':d[k]);}}}}return Promise.resolve(Object.assign({{brands:d.brands,mobile:d.mobile,platform:d.platform}},out))}};Object.defineProperty(p,'getHighEntropyValues',{{value:getHighEntropyValues}});function toJSON(){{return{{brands:this.brands,mobile:this.mobile,platform:this.platform}}}}Object.defineProperty(p,'toJSON',{{value:toJSON}});const f=()=>v;Object.defineProperty(f,'toString',{{value:()=>`function get userAgentData() {{ [native code] }}`}});Object.defineProperty(Navigator.prototype,'userAgentData',{{get:f,configurable:!0}});}})();"###,
         data.architecture,
         data.bitness,
         data.model,
@@ -379,9 +379,130 @@ pub fn spoof_user_agent_data_high_entropy_values(data: &HighEntropyUaData) -> St
     )
 }
 
+/// Returns the browser *major* version from a UA string (allocation-free, no deps).
+pub fn ua_major(ua: &str) -> Option<u16> {
+    // Prioritized tokens (desktop/mobile variants first).
+    const TOKENS: &[&str] = &[
+        "Chrome/",
+        "CriOS/",
+        "Edg/",
+        "EdgiOS/",
+        "OPR/",
+        "OPiOS/",
+        "Opera/",
+        "Firefox/",
+        "FxiOS/",
+        "Brave/",
+        "Chromium/",
+        "Version/", // Safari
+    ];
+
+    let bytes = ua.as_bytes();
+
+    // Fast path: look for any known token and parse digits after it.
+    for &t in TOKENS {
+        if let Some(pos) = find_substr(bytes, t.as_bytes()) {
+            return parse_major_digits(&bytes[pos + t.len()..]);
+        }
+    }
+
+    // Fallback: skip "Mozilla/5.0 (...)" and scan for next token-like "word/<digits>"
+    if let Some(end_paren) = ua.find(") ").map(|p| p + 2) {
+        let b = &bytes[end_paren..];
+        let mut i = 0;
+        while i < b.len() {
+            // find next '/'
+            if let Some(slash) = find_byte(&b[i..], b'/') {
+                let j = i + slash + 1;
+                if let Some(v) = parse_major_digits(&b[j..]) {
+                    return Some(v);
+                }
+                i = j;
+            } else {
+                break;
+            }
+        }
+    }
+
+    None
+}
+
+#[inline]
+fn parse_major_digits(bytes: &[u8]) -> Option<u16> {
+    let mut val: u32 = 0;
+    let mut saw = false;
+    for &ch in bytes {
+        if ch.is_ascii_digit() {
+            saw = true;
+            val = val * 10 + u32::from(ch - b'0');
+            if val > u16::MAX as u32 {
+                return None;
+            }
+        } else {
+            break; // stop at '.' or any non-digit
+        }
+    }
+    if saw {
+        Some(val as u16)
+    } else {
+        None
+    }
+}
+
+/// Tiny, dependency-free substring search optimized for short needles.
+#[inline]
+fn find_substr(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    match needle {
+        [] => Some(0),
+        [first, rest @ ..] => {
+            let n = needle.len();
+            let mut i = 0;
+            while i + n <= hay.len() {
+                // quick check on first byte
+                if hay[i] == *first && &hay[i + 1..i + n] == rest {
+                    return Some(i);
+                }
+                i += 1;
+            }
+            None
+        }
+    }
+}
+
+/// Find a single byte.
+#[inline]
+fn find_byte(hay: &[u8], byte: u8) -> Option<usize> {
+    for (i, &b) in hay.iter().enumerate() {
+        if b == byte {
+            return Some(i);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ua_major_examples() {
+        // Chrome desktop
+        let chrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+                      AppleWebKit/537.36 (KHTML, like Gecko) \
+                      Chrome/124.0.6367.118 Safari/537.36";
+        assert_eq!(ua_major(chrome), Some(124));
+
+        // Safari (uses Version/x.y before Safari/)
+        let safari = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) \
+                      AppleWebKit/605.1.15 (KHTML, like Gecko) \
+                      Version/17.1 Safari/605.1.15";
+        assert_eq!(ua_major(safari), Some(17));
+
+        // Firefox desktop
+        let firefox = "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:128.0) \
+                       Gecko/20100101 Firefox/128.0";
+        assert_eq!(ua_major(firefox), Some(128));
+    }
 
     #[test]
     fn build_high_entropy_data_test() {

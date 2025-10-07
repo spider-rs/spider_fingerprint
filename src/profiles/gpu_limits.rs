@@ -224,6 +224,8 @@ impl GpuLimits {
             | AgentOs::Windows
             | AgentOs::Android
             | AgentOs::IPhone
+            | AgentOs::IPad
+            | AgentOs::ChromeOS
             | AgentOs::Unknown => Self {
                 max_texture_dimension_1d: 16384,
                 max_texture_dimension_2d: 16384,

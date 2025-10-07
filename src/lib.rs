@@ -59,6 +59,8 @@ use crate::spoofs::PATCH_SPEECH_SYNTHESIS;
 pub enum BrowserKind {
     /// Chrome
     Chrome,
+    /// Brave
+    Brave,
     /// Firefox
     Firefox,
     /// Safari
@@ -71,6 +73,17 @@ pub enum BrowserKind {
     Other,
 }
 
+impl BrowserKind {
+    /// Is the browser chromium based.
+    fn is_chromium(&self) -> bool {
+        match &self {
+            BrowserKind::Chrome | BrowserKind::Opera | BrowserKind::Brave | BrowserKind::Edge => {
+                true
+            }
+            _ => false,
+        }
+    }
+}
 const P_EDG: usize = 0; // "edg/"
 const P_OPR: usize = 1; // "opr/"
 const P_CHR: usize = 2; // "chrome/"
@@ -101,6 +114,7 @@ lazy_static::lazy_static! {
         .expect("failed to compile AhoCorasick patterns");
 
 
+    /// Allowed ua data for chromium based browsers.
     pub(crate) static ref ALLOWED_UA_DATA: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
             .ascii_case_insensitive(true)
             .match_kind(aho_corasick::MatchKind::LeftmostFirst)
@@ -115,19 +129,129 @@ lazy_static::lazy_static! {
                 "firefox", "fxios",               // Firefox
                 "chrome/", "crios", "chromium",   // Chrome
                 "safari",                         // Safari
+                "brave",                          // Brave (incase future changes add.)
             ])
             .expect("valid device patterns");
 
+
+        // Detect Chrome/CriOS first (we only classify Chrome-family UAs).
+        static ref CHROME_AC: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
+                .ascii_case_insensitive(true)
+                .build(["Chrome", "CriOS"]) .expect("valid device patterns");
+
+        /// OS patterns. Order doesn’t matter; we store priorities separately.
+        static ref OS_PATTERNS:[&'static str; 12] =[
+            // iOS family first (iPad/iPhone contain "Mac OS X" too, so give them better priority)
+            "iPhone", "iPad", "iOS",
+            // Android
+            "Android",
+            // Windows
+            "Windows NT", "Windows", "Win64",
+            // Mac
+            "Macintosh", "Mac OS X", "Mac",
+            // Linux
+            "Linux",
+            // ChromeOS if you later add an enum variant:
+            "CrOS",
+        ];
+
+        static ref OS_AC: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
+                .ascii_case_insensitive(true)
+                .build(*OS_PATTERNS)
+                .expect("valid device patterns");
+
+        /// Map each pattern index -> (AgentOs, priority). Lower priority wins on ties.
+        static ref OS_MAP: [ (AgentOs, u8); 11 ] = [
+            (AgentOs::IPhone, 0), // iPhone
+            (AgentOs::IPad,   0), // iPad
+            (AgentOs::IPhone, 1), // iOS   (generic iOS fallback)
+            (AgentOs::Android,0), // Android
+            (AgentOs::Windows,2), // Windows NT
+            (AgentOs::Windows,3), // Windows
+            (AgentOs::Windows,4), // Win64
+            (AgentOs::Mac,    5), // Macintosh
+            (AgentOs::Mac,    6), // Mac OS X
+            (AgentOs::Mac,    7), // Mac
+            (AgentOs::Linux,  9), // Linux (kept lower than Android)
+        ];
+
+        static ref FF_PATTERNS: [&'static str; 6] = [
+            "iPad", "iPhone", "iPod", "Android", "Mobile", "Tablet",
+        ];
+
+        static ref FF_AC: aho_corasick::AhoCorasick = aho_corasick::AhoCorasickBuilder::new()
+                .ascii_case_insensitive(true)
+                .build(*FF_PATTERNS)
+                .expect("valid device patterns");
+}
+
+#[inline]
+fn scan_flags(ua: &str) -> (bool, bool, bool, bool, bool, bool) {
+    // (ipad, iphone, ipod, android, mobile, tablet)
+    let (mut ipad, mut iphone, mut ipod, mut android, mut mobile, mut tablet) =
+        (false, false, false, false, false, false);
+    for m in FF_AC.find_iter(ua) {
+        match m.pattern().as_u32() {
+            0 => ipad = true,
+            1 => iphone = true,
+            2 => ipod = true,
+            3 => android = true,
+            4 => mobile = true,
+            5 => tablet = true,
+            _ => {}
+        }
+    }
+    (ipad, iphone, ipod, android, mobile, tablet)
+}
+
+/// Return "?1" (mobile) or "?0" (not mobile).
+pub fn detect_is_mobile(ua: &str) -> &'static str {
+    let (ipad, iphone, ipod, android, mobile, tablet) = scan_flags(ua);
+
+    // Tablet devices are considered "mobile = true" per your C++ mapping.
+    if ipad || iphone || ipod || android || mobile || tablet {
+        "?1"
+    } else {
+        "?0"
+    }
+}
+
+/// Return the form factor: "Mobile" | "Tablet" | "Desktop".
+pub fn detect_form_factor(ua: &str) -> &'static str {
+    let (ipad, iphone, ipod, android, mobile, tablet) = scan_flags(ua);
+
+    // Priority:
+    // 1) iPad => Tablet (even if "Mobile" token appears)
+    if ipad {
+        return "Tablet";
+    }
+    // 2) iPhone/iPod => Mobile
+    if iphone || ipod {
+        return "Mobile";
+    }
+    // 3) Android: "Mobile" token => Mobile phone, otherwise Tablet
+    if android {
+        return if mobile { "Mobile" } else { "Tablet" };
+    }
+    // 4) Explicit "Tablet" token
+    if tablet {
+        return "Tablet";
+    }
+    // 5) Generic "Mobile" token
+    if mobile {
+        return "Mobile";
+    }
+    "Desktop"
 }
 
 /// Detect the browser type.
-/// Order of preference: chrome -> safari -> edge -> firefox -> opera
 pub fn detect_browser(ua: &str) -> &'static str {
     let mut edge = false;
     let mut opera = false;
     let mut firefox = false;
     let mut chrome = false;
     let mut safari = false;
+    let mut brave = false;
 
     for m in BROWSER_MATCH.find_iter(ua) {
         match m.pattern().as_u32() {
@@ -136,11 +260,14 @@ pub fn detect_browser(ua: &str) -> &'static str {
             6 | 7 => firefox = true,     // firefox/fxios
             8 | 9 | 10 => chrome = true, // chrome/, crios, chromium
             11 => safari = true,         // safari
+            12 => brave = true,          // brave
             _ => (),
         }
     }
 
-    if chrome && !edge && !opera {
+    if brave && chrome && !edge && !opera {
+        "brave"
+    } else if chrome && !edge && !opera {
         "chrome"
     } else if safari && !chrome && !edge && !opera && !firefox {
         "safari"
@@ -156,28 +283,24 @@ pub fn detect_browser(ua: &str) -> &'static str {
 }
 
 /// Detect the browser type to BrowserKind.
-/// Order of preference: chrome -> safari -> edge -> firefox -> opera
 pub fn detect_browser_kind(ua: &str) -> BrowserKind {
     let s = detect_browser(ua);
-    if s.eq_ignore_ascii_case("chrome") {
-        BrowserKind::Chrome
-    } else if s.eq_ignore_ascii_case("safari") {
-        BrowserKind::Safari
-    } else if s.eq_ignore_ascii_case("edge") {
-        BrowserKind::Edge
-    } else if s.eq_ignore_ascii_case("firefox") {
-        BrowserKind::Firefox
-    } else if s.eq_ignore_ascii_case("opera") {
-        BrowserKind::Opera
-    } else if s.eq_ignore_ascii_case("unknown") {
-        BrowserKind::Other
-    } else {
-        BrowserKind::Chrome
+
+    match s {
+        "chrome" => BrowserKind::Chrome,
+        "brave" => BrowserKind::Brave,
+        "safari" => BrowserKind::Safari,
+        "edge" => BrowserKind::Edge,
+        "firefox" => BrowserKind::Firefox,
+        "opera" => BrowserKind::Opera,
+        "unknown" => BrowserKind::Other,
+        _ => BrowserKind::Other,
     }
 }
 
 #[inline]
-fn parse_major_after(s: &str, end_token: usize) -> Option<u32> {
+/// Parse the major after.
+pub fn parse_major_after(s: &str, end_token: usize) -> Option<u32> {
     if end_token >= s.len() {
         return None;
     }
@@ -268,10 +391,7 @@ fn build_stealth_script_base(
     };
 
     // tmp used for chrome only os checking.
-    let chrome = browser == BrowserKind::Chrome
-        || browser == BrowserKind::Opera
-        || browser == BrowserKind::Edge
-        || os != AgentOs::Unknown;
+    let chrome = browser.is_chromium() || os != AgentOs::Unknown;
 
     let spoof_worker = if tier == Tier::BasicNoWorker {
         Default::default()
@@ -460,28 +580,40 @@ pub struct EmulationConfiguration {
     pub hardware_concurrency: bool,
 }
 
-/// Get the OS being used for chrome only.
+/// Fast Chrome-only OS detection using Aho-Corasick (ASCII case-insensitive).
 pub fn get_agent_os(user_agent: &str) -> AgentOs {
-    let mut agent_os = AgentOs::Unknown;
-
-    if user_agent.contains("Chrome") {
-        if user_agent.contains("Linux") {
-            agent_os = AgentOs::Linux;
-        } else if user_agent.contains("Mac") {
-            agent_os = AgentOs::Mac;
-        } else if user_agent.contains("Windows") {
-            agent_os = AgentOs::Windows;
-        } else if user_agent.contains("Android") {
-            agent_os = AgentOs::Android;
-        } else if user_agent.contains("iPhone")
-            || user_agent.contains("iPad")
-            || user_agent.contains("iOS")
-        {
-            agent_os = AgentOs::IPhone;
-        }
+    if !CHROME_AC.is_match(user_agent) {
+        return AgentOs::Unknown;
     }
+    let mut best: Option<(u8, usize, AgentOs)> = None;
+    for m in OS_AC.find_iter(user_agent) {
+        let (os, pri) = OS_MAP[m.pattern()];
+        let cand = (pri, m.len(), os);
+        best = match best {
+            None => Some(cand),
+            Some(cur) => {
+                if cand.0 < cur.0 || (cand.0 == cur.0 && cand.1 > cur.1) {
+                    Some(cand)
+                } else {
+                    Some(cur)
+                }
+            }
+        };
+    }
+    best.map(|t| t.2).unwrap_or(AgentOs::Unknown)
+}
 
-    agent_os
+/// Agent Operating system to string
+pub fn agent_os_strings(os: AgentOs) -> &'static str {
+    match os {
+        AgentOs::Android => "Android",
+        AgentOs::IPhone | AgentOs::IPad => "iOS",
+        AgentOs::Mac => "macOS",
+        AgentOs::Windows => "Windows",
+        AgentOs::Linux => "Linux",
+        AgentOs::ChromeOS => "Chrome OS",
+        AgentOs::Unknown => "Unknown",
+    }
 }
 
 /// Setup the emulation defaults.
@@ -708,7 +840,10 @@ pub fn emulate_with_profile(
 
 #[cfg(test)]
 mod tests {
-    use super::{emulate, ua_allows_gethighentropy, EmulationConfiguration};
+    use super::{
+        detect_form_factor, detect_is_mobile, emulate, get_agent_os, ua_allows_gethighentropy,
+        AgentOs, EmulationConfiguration,
+    };
 
     #[test]
     fn emulation() {
@@ -772,5 +907,93 @@ mod tests {
                 "expected NOT supported: {ua}"
             );
         }
+    }
+
+    #[test]
+    fn detects_agent_os_across_platforms() {
+        let cases: &[(&str, AgentOs)] = &[
+            // Windows (Chrome)
+            ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+             AgentOs::Windows),
+
+            // macOS (Chrome)
+            ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+             AgentOs::Mac),
+
+            // Linux (Chrome)
+            ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+             AgentOs::Linux),
+
+            // Android (Chrome)
+            ("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+             AgentOs::Android),
+
+            // iPhone (Chrome on iOS uses CriOS)
+            ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/124.0.0.0 Mobile/15E148 Safari/604.1",
+             AgentOs::IPhone),
+
+            // iPad (CriOS) — should still resolve to iOS
+            ("Mozilla/5.0 (iPad; CPU OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/123.0.0.0 Mobile/15E148 Safari/604.1",
+             AgentOs::IPad),
+
+            // Edge (Chromium) still contains Chrome token -> Windows
+            ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+             AgentOs::Windows),
+
+            // Mixed case (should be matched case-insensitively) -> Linux
+            ("mozilla/5.0 (x11; linux x86_64) applewebkit/537.36 (khtml, like gecko) chrome/120.0.0.0 safari/537.36",
+             AgentOs::Linux),
+
+            // Non-Chrome (Firefox) -> Unknown due to Chrome/CriOS gate
+            ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+             AgentOs::Unknown),
+
+            // Not a browser UA
+            ("curl/8.0.1",
+             AgentOs::Unknown),
+        ];
+
+        for (ua, expected) in cases {
+            let got = get_agent_os(ua);
+            assert_eq!(got, *expected, "UA: {}", ua);
+        }
+    }
+
+    #[test]
+    fn prioritizes_ios_over_mac_tokens() {
+        let ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/124.0.0.0 Mobile/15E148 Safari/604.1";
+        assert_eq!(get_agent_os(ua), AgentOs::IPhone);
+    }
+
+    #[test]
+    fn android_phone() {
+        let ua = "Mozilla/5.0 (Linux; Android 13; Pixel 7) ... Mobile Safari/537.36";
+        assert_eq!(detect_is_mobile(ua), "?1");
+        assert_eq!(detect_form_factor(ua), "Mobile");
+    }
+
+    #[test]
+    fn android_tablet() {
+        let ua = "Mozilla/5.0 (Linux; Android 12; SM-T970) ... Safari/537.36";
+        assert_eq!(detect_is_mobile(ua), "?1");
+        assert_eq!(detect_form_factor(ua), "Tablet");
+    }
+
+    #[test]
+    fn iphone_and_ipad() {
+        let iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 ...) CriOS/124.0.0.0 Mobile/15E148";
+        assert_eq!(detect_is_mobile(iphone), "?1");
+        assert_eq!(detect_form_factor(iphone), "Mobile");
+
+        let ipad = "Mozilla/5.0 (iPad; CPU OS 16_6 ...) CriOS/123.0.0.0 Mobile/15E148";
+        assert_eq!(detect_is_mobile(ipad), "?1");
+        assert_eq!(detect_form_factor(ipad), "Tablet");
+    }
+
+    #[test]
+    fn desktop_linux() {
+        let ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ... Chrome/124 Safari/537.36";
+        assert_eq!(detect_is_mobile(ua), "?0");
+        assert_eq!(detect_form_factor(ua), "Desktop");
     }
 }
