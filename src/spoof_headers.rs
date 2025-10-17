@@ -46,7 +46,7 @@ fn parse_user_agent_to_ch_ua(ua: &str, dec: bool, linux: bool) -> String {
         .and_then(|s| s.split_whitespace().next())
     {
         if let Some(major_version) = version.split('.').next() {
-            parts.push(format!(
+            let chromium_version = format!(
                 r#""Chromium";v="{}{}""#,
                 major_version,
                 if dec {
@@ -58,9 +58,18 @@ fn parse_user_agent_to_ch_ua(ua: &str, dec: bool, linux: bool) -> String {
                 } else {
                     ""
                 }
-            ));
-            parts.push(format!(
-                r#""Not:A-Brand";v="{}{}""#,
+            );
+            let google_chrome_major = format!(r#""Google Chrome";v="{}""#, major_version);
+            let one_fourty_one = major_version == "141";
+
+            let brand_label = if one_fourty_one {
+                "Not?A_Brand"
+            } else {
+                "Not:A-Brand"
+            };
+
+            let not_a_brand_label = format!(
+                r#""{brand_label}";v="{}{}""#,
                 *NOT_A_BRAND_VERSION,
                 if dec {
                     if linux {
@@ -71,8 +80,17 @@ fn parse_user_agent_to_ch_ua(ua: &str, dec: bool, linux: bool) -> String {
                 } else {
                     ""
                 }
-            ));
-            parts.push(format!(r#""Google Chrome";v="{}""#, major_version));
+            );
+
+            if one_fourty_one {
+                parts.push(google_chrome_major);
+                parts.push(not_a_brand_label);
+                parts.push(chromium_version);
+            } else {
+                parts.push(chromium_version);
+                parts.push(not_a_brand_label);
+                parts.push(google_chrome_major);
+            }
         }
     }
 

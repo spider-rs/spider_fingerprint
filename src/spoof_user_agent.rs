@@ -173,13 +173,13 @@ pub fn get_default_version() -> &'static str {
 /// Build the entropy data.
 pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
     let user_agent: &str = user_agent.as_deref().map_or("", |v| v);
-
     let full_version = user_agent
         .split_whitespace()
         .find_map(|s| s.strip_prefix("Chrome/"))
         .unwrap_or(&get_default_version());
 
     let mut older_brand = true;
+    let mut chrome_major = 0;
 
     let (architecture, model, platform, platform_version, bitness): (
         &str,
@@ -192,6 +192,7 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
             .split(';')
             .find_map(|s| s.trim().strip_prefix("Android "))
             .unwrap_or("13");
+        chrome_major = version.parse::<u32>().ok().unwrap_or_default();
 
         let model = user_agent
             .split(';')
@@ -212,6 +213,7 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
             .nth(1)
             .and_then(|s| s.split(';').next())
             .unwrap_or("10.0");
+        chrome_major = version.parse::<u32>().ok().unwrap_or_default();
 
         let bitness = if user_agent.contains("Win64")
             || user_agent.contains("x64")
@@ -230,7 +232,7 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
             bitness,
         )
     } else if user_agent.contains("Mac OS X") {
-        let chrome_major = full_version
+        chrome_major = full_version
             .split('.')
             .next()
             .and_then(|s| s.parse::<u32>().ok())
@@ -287,6 +289,8 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
             .collect::<Vec<_>>()
             .join(".");
 
+        chrome_major = platform_version.parse::<u32>().ok().unwrap_or_default();
+
         let bitness = if user_agent.contains("x86_64")
             || user_agent.contains("amd64")
             || user_agent.contains("arm64")
@@ -305,28 +309,44 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
     // base canary is released 2 versions ahead of chrome.
     // canary not a brand starts at 8.0 while normal chrome "99"
     // we need to spoof this for firefox.
-    let full_version_list = vec![
-        BrandEntry {
-            brand: "Chromium".into(),
-            version: full_version.into(),
-        },
-        BrandEntry {
-            brand: "Google Chrome".into(),
-            version: full_version.into(),
-        },
-        BrandEntry {
-            // canary use Not)A;Brand
-            brand: if older_brand {
-                "Not-A.Brand"
-            } else if platform_version == "15.5.0" {
-                "Not;A=Brand"
-            } else {
-                "Not.A/Brand"
-            }
-            .into(),
-            version: crate::CHROME_NOT_A_BRAND_VERSION.clone(),
-        },
-    ];
+    let full_version_list = if chrome_major == 141 {
+        vec![
+            BrandEntry {
+                brand: "Google Chrome".into(),
+                version: full_version.into(),
+            },
+            BrandEntry {
+                brand: "Chromium".into(),
+                version: full_version.into(),
+            },
+            BrandEntry {
+                brand: "Not?A_Brand".into(),
+                version: crate::CHROME_NOT_A_BRAND_VERSION.clone(),
+            },
+        ]
+    } else {
+        vec![
+            BrandEntry {
+                brand: "Chromium".into(),
+                version: full_version.into(),
+            },
+            BrandEntry {
+                brand: "Google Chrome".into(),
+                version: full_version.into(),
+            },
+            BrandEntry {
+                brand: if older_brand {
+                    "Not-A.Brand"
+                } else if platform_version == "15.5.0" {
+                    "Not;A=Brand"
+                } else {
+                    "Not.A/Brand"
+                }
+                .into(),
+                version: crate::CHROME_NOT_A_BRAND_VERSION.clone(),
+            },
+        ]
+    };
 
     let mobile = mobile_model_from_user_agent(user_agent);
     let mobile_device = mobile.is_some();
