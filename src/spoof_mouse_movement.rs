@@ -380,14 +380,14 @@ impl GaussianMouse {
         // Final composed path
         let mut final_x = vec![start_x as f64];
         final_x.extend(bezier_x.iter().zip(&morphed_x).map(|(&bx, &mx)| bx + mx));
-        final_x.push(end_x as f64);
+        final_x.push(end_x);
 
         let mut final_y = vec![start_y as f64];
         final_y.extend(bezier_y.iter().zip(&morphed_y).map(|(&by, &my)| by + my));
-        final_y.push(end_y as f64);
+        final_y.push(end_y);
 
         // Combine x and y into a path
-        final_x.into_iter().zip(final_y.into_iter()).collect()
+        final_x.into_iter().zip(final_y).collect()
     }
 
     /// Generates a list of coordinates using Gaussian random walk.
@@ -443,10 +443,10 @@ impl GaussianMouse {
         let movements =
             Self::generate_gaussian_mouse_movements(0.0, start_y, 0.0, end_y, 1.0, 2.0, 1.0);
         let mut y_coords: Vec<f64> = movements.iter().map(|&(_, y)| y).collect();
-        y_coords.push(end_y as f64);
+        y_coords.push(end_y);
         let x_coords: Vec<f64> = vec![0.0; y_coords.len()];
 
-        x_coords.into_iter().zip(y_coords.into_iter()).collect()
+        x_coords.into_iter().zip(y_coords).collect()
     }
 }
 

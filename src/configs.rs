@@ -2,7 +2,6 @@
 #[derive(PartialEq, Debug, Default, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Tier {
-    #[default]
     /// Basic spoofing.
     Basic,
     /// Basic spoofing with console.
@@ -23,10 +22,21 @@ pub enum Tier {
     HideOnlyChrome,
     /// Low spoofing.
     Low,
+    /// Low spoofing with plugins.
+    LowWithPlugins,
+    #[default]
+    /// Low spoofing with navigator.
+    LowWithNavigator,
     /// Mid spoofing.
     Mid,
     /// Full spoofing.
     Full,
+    /// Basic spoofing without extra emulation.
+    BasicNoExtra,
+    /// Basic spoofing without webgl only gpu and no extra.
+    BasicNoWebglWithGPUNoExtra,
+    /// Extra only.
+    Extra,
     /// No spoofing
     None,
 }
