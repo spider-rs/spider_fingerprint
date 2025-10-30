@@ -46,4 +46,40 @@ pub static GPU_PROFILES_IPHONE: &[GpuProfile] = &[
         canvas_format: "bgra8unorm",
         hardware_concurrency: 6,
     },
+    // iPhone 16 / 16 Plus (Apple A18 Bionic)
+    GpuProfile {
+        webgl_vendor: "Apple Inc.",
+        webgl_renderer: "Apple A18 GPU",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 6,
+    },
+    // iPhone 16 Pro / 16 Pro Max (Apple A18 Pro)
+    GpuProfile {
+        webgl_vendor: "Apple Inc.",
+        webgl_renderer: "Apple A18 Pro GPU",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 6,
+    },
+    // iPhone 17 (Apple A19 Bionic) — projected spoof
+    GpuProfile {
+        webgl_vendor: "Apple Inc.",
+        webgl_renderer: "Apple A19 GPU",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 6,
+    },
+    // iPhone 17 Pro / 17 Pro Max (Apple A19 Pro) — projected spoof
+    GpuProfile {
+        webgl_vendor: "Apple Inc.",
+        webgl_renderer: "Apple A19 Pro GPU",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 6,
+    },
 ];

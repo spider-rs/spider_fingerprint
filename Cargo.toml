@@ -1,12 +1,12 @@
 [package]
 name = "spider_fingerprint"
-version = "2.37.212"
+version = "2.37.213"
 authors = ["j-mendez <jeff@spider.cloud>"]
 description = "Fingerprint library for Rust."
 repository = "https://github.com/spider-rs/spider_fingerprint"
 homepage = "https://github.com/spider-rs/spider_fingerprint"
 readme = "README.md"
-keywords = ["fingerprint", "browser"]
+keywords = ["fingerprint", "browser", "emulation"]
 categories = ["web-programming", "command-line-utilities"]
 license = "MIT"
 documentation = "https://docs.rs/spider_fingerprint"

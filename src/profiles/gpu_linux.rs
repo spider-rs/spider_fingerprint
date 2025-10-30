@@ -93,4 +93,58 @@ pub static GPU_PROFILES_LINUX: &[GpuProfile] = &[
         canvas_format: "rgba8unorm",
         hardware_concurrency: 8,
     },
+    // NVIDIA RTX 4090 (desktop, proprietary)
+    GpuProfile {
+        webgl_vendor: "NVIDIA Corporation",
+        webgl_renderer: "NVIDIA GeForce RTX 4090/PCIe/SSE2",
+        webgpu_vendor: "nvidia",
+        webgpu_architecture: "vulkan",
+        canvas_format: "rgba8unorm",
+        hardware_concurrency: 32,
+    },
+    // NVIDIA RTX 3070 (desktop, proprietary)
+    GpuProfile {
+        webgl_vendor: "NVIDIA Corporation",
+        webgl_renderer: "NVIDIA GeForce RTX 3070/PCIe/SSE2",
+        webgpu_vendor: "nvidia",
+        webgpu_architecture: "vulkan",
+        canvas_format: "rgba8unorm",
+        hardware_concurrency: 16,
+    },
+    // NVIDIA Tesla T4 (cloud / servers, proprietary)
+    GpuProfile {
+        webgl_vendor: "NVIDIA Corporation",
+        webgl_renderer: "NVIDIA Tesla T4/PCIe/SSE2",
+        webgpu_vendor: "nvidia",
+        webgpu_architecture: "vulkan",
+        canvas_format: "rgba8unorm",
+        hardware_concurrency: 8,
+    },
+    // NVIDIA A100 PCIe (cloud / HPC, proprietary)
+    GpuProfile {
+        webgl_vendor: "NVIDIA Corporation",
+        webgl_renderer: "NVIDIA A100-PCIE-40GB/PCIe/SSE2",
+        webgpu_vendor: "nvidia",
+        webgpu_architecture: "vulkan",
+        canvas_format: "rgba8unorm",
+        hardware_concurrency: 32,
+    },
+    // AMD Radeon RX 6600 XT (RDNA2, Mesa)
+    GpuProfile {
+        webgl_vendor: "AMD",
+        webgl_renderer: "AMD Radeon RX 6600 XT (NAVI23, DRM 3.49.0, 6.4.0-arch1-1, LLVM 16.0.6)",
+        webgpu_vendor: "amd",
+        webgpu_architecture: "vulkan",
+        canvas_format: "rgba8unorm",
+        hardware_concurrency: 12,
+    },
+    // AMD Radeon RX 7900 XTX (RDNA3, Mesa)
+    GpuProfile {
+        webgl_vendor: "AMD",
+        webgl_renderer: "AMD Radeon RX 7900 XTX (GFX1100, DRM 3.52.0, 6.6.0, LLVM 17.0.6)",
+        webgpu_vendor: "amd",
+        webgpu_architecture: "vulkan",
+        canvas_format: "rgba8unorm",
+        hardware_concurrency: 24,
+    },
 ];

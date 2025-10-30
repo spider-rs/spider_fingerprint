@@ -136,4 +136,13 @@ pub static GPU_PROFILES_MAC: &[GpuProfile] = &[
         canvas_format: "bgra8unorm",
         hardware_concurrency: 24,
     },
+    // Apple M5 (base model)
+    GpuProfile {
+        webgl_vendor: "Google Inc. (Apple)",
+        webgl_renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 10,
+    },
 ];

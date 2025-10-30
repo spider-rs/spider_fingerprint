@@ -241,9 +241,9 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
         // 139 plus
         let base_mac = 15.5;
 
-        let platform_version = if chrome_major == 138 {
+        let platform_version = if chrome_major <= 138 {
             "14.6.1".into()
-        } else if (139..=141).contains(&chrome_major) {
+        } else if chrome_major >= 139 {
             "15.5.0".into()
         } else {
             let sub_delta = chrome_major < *BASE_CHROME_VERSION;

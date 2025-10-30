@@ -573,7 +573,7 @@ lazy_static::lazy_static! {
         "https://ok.ru/",
         "https://mail.ru/",
         "https://weibo.cn/",
-        "https://discord.gg/", 
+        "https://discord.gg/",
         "https://quora.es/",
         "https://quora.fr/",
         "https://pinterest.co.uk/",
