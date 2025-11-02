@@ -163,18 +163,19 @@ lazy_static::lazy_static! {
                 .expect("valid device patterns");
 
         /// Map each pattern index -> (AgentOs, priority). Lower priority wins on ties.
-        static ref OS_MAP: [ (AgentOs, u8); 11 ] = [
-            (AgentOs::IPhone, 0), // iPhone
-            (AgentOs::IPad,   0), // iPad
-            (AgentOs::IPhone, 1), // iOS   (generic iOS fallback)
-            (AgentOs::Android,0), // Android
-            (AgentOs::Windows,2), // Windows NT
-            (AgentOs::Windows,3), // Windows
-            (AgentOs::Windows,4), // Win64
-            (AgentOs::Mac,    5), // Macintosh
-            (AgentOs::Mac,    6), // Mac OS X
-            (AgentOs::Mac,    7), // Mac
-            (AgentOs::Linux,  9), // Linux (kept lower than Android)
+        static ref OS_MAP: [ (AgentOs, u8); 12 ] = [
+            (AgentOs::IPhone,  0),
+            (AgentOs::IPad,    0),
+            (AgentOs::IPhone,  1),
+            (AgentOs::Android, 0),
+            (AgentOs::Windows, 2),
+            (AgentOs::Windows, 3),
+            (AgentOs::Windows, 4),
+            (AgentOs::Mac,     5),
+            (AgentOs::Mac,     6),
+            (AgentOs::Mac,     7),
+            (AgentOs::Linux,   9),
+            (AgentOs::Linux,   8), // CrOS → Linux fallback
         ];
 
         static ref FF_PATTERNS: [&'static str; 6] = [
