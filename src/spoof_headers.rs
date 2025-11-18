@@ -266,6 +266,8 @@ pub enum HeaderDetailLevel {
     MildNoRef,
     /// Include the full, extensive set of headers.
     Extensive,
+    /// Near mimic match. Not ideal for chrome.
+    NearMimic,
     #[default]
     /// Include the full, extensive set of headers without the referrer header.
     ExtensiveNoRef,
@@ -308,7 +310,7 @@ pub fn emulate_headers(
         detail_level,
         Some(HeaderDetailLevel::Extensive) | Some(HeaderDetailLevel::ExtensiveNoRef) | None
     );
-
+    let mimic = matches!(detail_level, Some(HeaderDetailLevel::NearMimic));
     let mut headers = HeaderMap::with_capacity(cap);
     let binding = HeaderMap::with_capacity(cap);
     let mut map_exist = false;
@@ -447,19 +449,23 @@ pub fn emulate_headers(
                 })
             );
             // 4. Upgrade-Insecure-Requests
-            insert_or_default!(
-                &upgrade_request_header.as_header_name(),
-                HeaderValue::from_static("1")
-            );
+            if mimic {
+                insert_or_default!(
+                    &upgrade_request_header.as_header_name(),
+                    HeaderValue::from_static("1")
+                );
+            }
             // 5. User-Agent
             if let Ok(ua) = HeaderValue::from_str(user_agent) {
                 insert_or_default!(&useragent_header.as_header_name(), ua);
             }
             // 6. Accept
-            insert_or_default!(
-               &accept_header.as_header_name(),
-                HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-            );
+            if mimic {
+                insert_or_default!(
+                   &accept_header.as_header_name(),
+                    HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+                );
+            }
             // 7. Sec-Fetch group
             insert_or_default!("Sec-Fetch-Site", HeaderValue::from_static("none"));
             insert_or_default!("Sec-Fetch-Mode", HeaderValue::from_static("navigate"));
@@ -489,14 +495,20 @@ pub fn emulate_headers(
                 &accept_encoding.as_header_name(),
                 HeaderValue::from_static("gzip, deflate, br, zstd")
             );
-            insert_or_default!(
-                &accept_language.as_header_name(),
-                HeaderValue::from_static(get_accept_language())
-            );
-            insert_or_default!(
-                &pragma_header.as_header_name(),
-                HeaderValue::from_static("no-cache")
-            );
+
+            if thread_rng.random_bool(0.4) {
+                insert_or_default!(
+                    &accept_language.as_header_name(),
+                    HeaderValue::from_static(get_accept_language())
+                );
+            }
+
+            if mimic {
+                insert_or_default!(
+                    &pragma_header.as_header_name(),
+                    HeaderValue::from_static("no-cache")
+                );
+            }
 
             if extensive || linux_agent {
                 if let Ok(device_memory_str) = HeaderValue::from_str(&device_memory_str) {
@@ -505,36 +517,44 @@ pub fn emulate_headers(
             }
 
             // 10. Optional behavior/diagnostic headers
-            insert_or_default!(
-                &cache_control_header.as_header_name(),
-                HeaderValue::from_static("max-age=0")
-            );
+            if mimic {
+                insert_or_default!(
+                    &cache_control_header.as_header_name(),
+                    HeaderValue::from_static("no-cache")
+                );
+            }
 
             if extensive || linux_agent {
                 insert_or_default!("Sec-CH-DPR", HeaderValue::from_static("2"));
-                if let Some(vp) = viewport {
-                    let width = if vp.width > 0 {
-                        format!("{}", vp.width)
-                    } else {
-                        format!(
-                            "{}",
-                            crate::spoof_viewport::randomize_viewport_rng(
-                                &crate::spoof_viewport::DeviceType::Desktop,
-                                &mut thread_rng
+                // this should be sent internally.
+                if thread_rng.random() {
+                    if let Some(vp) = viewport {
+                        let width = if vp.width > 0 {
+                            format!("{}", vp.width)
+                        } else {
+                            format!(
+                                "{}",
+                                crate::spoof_viewport::randomize_viewport_rng(
+                                    &crate::spoof_viewport::DeviceType::Desktop,
+                                    &mut thread_rng
+                                )
+                                .width
                             )
-                            .width
-                        )
-                    };
+                        };
 
-                    if let Ok(width) = HeaderValue::from_str(&width) {
-                        // wait for announcements - maybe 160
-                        // insert_or_default!("Sec-CH-Viewport-Width", width);
-                        insert_or_default!("Viewport-Width", width);
+                        if let Ok(width) = HeaderValue::from_str(&width) {
+                            // wait for announcements - maybe 160
+                            // insert_or_default!("Sec-CH-Viewport-Width", width);
+                            insert_or_default!("Viewport-Width", width);
+                        }
                     }
                 }
             }
 
-            insert_or_default!("Priority", HeaderValue::from_static("u=0, i"));
+            // this should be set auto
+            if linux_agent && extensive && thread_rng.random() {
+                insert_or_default!("Priority", HeaderValue::from_static("u=0, i"));
+            }
 
             if mild {
                 insert_or_default!("Ect", HeaderValue::from_static("4g"));
