@@ -275,6 +275,10 @@ pub enum HeaderDetailLevel {
     Empty,
 }
 
+/// The default accept lang header.
+const DEFAULT_ACCEPT_HEADER: &str = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8";
+const DEFAULT_ACCEPT_HEADER_SIGNED: &str = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
+
 /// Emulate real HTTP chrome headers.
 pub fn emulate_headers(
     user_agent: &str,
@@ -460,12 +464,14 @@ pub fn emulate_headers(
                 insert_or_default!(&useragent_header.as_header_name(), ua);
             }
             // 6. Accept
-            if mimic {
-                insert_or_default!(
-                   &accept_header.as_header_name(),
-                    HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-                );
-            }
+            insert_or_default!(
+                &accept_header.as_header_name(),
+                HeaderValue::from_static(if mimic {
+                    DEFAULT_ACCEPT_HEADER_SIGNED
+                } else {
+                    DEFAULT_ACCEPT_HEADER
+                })
+            );
             // 7. Sec-Fetch group
             insert_or_default!("Sec-Fetch-Site", HeaderValue::from_static("none"));
             insert_or_default!("Sec-Fetch-Mode", HeaderValue::from_static("navigate"));
