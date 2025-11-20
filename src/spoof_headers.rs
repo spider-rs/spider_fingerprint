@@ -460,10 +460,12 @@ pub fn emulate_headers(
                 insert_or_default!(&useragent_header.as_header_name(), ua);
             }
             // 6. Accept
-            insert_or_default!(
-                &accept_header.as_header_name(),
-                HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
-            );
+            if mimic {
+                insert_or_default!(
+                   &accept_header.as_header_name(),
+                    HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+                );
+            }
             // 7. Sec-Fetch group
             insert_or_default!("Sec-Fetch-Site", HeaderValue::from_static("none"));
             insert_or_default!("Sec-Fetch-Mode", HeaderValue::from_static("navigate"));
