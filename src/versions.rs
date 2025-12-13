@@ -3,15 +3,12 @@ use rand::Rng;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/chrome_versions.rs"));
 
-pub(crate) const BASE_VERSION: u32 = 141;
-pub(crate) const CHROME_STATIC_VERSION: &str = "141.0.7390.66";
+pub(crate) const BASE_VERSION: u32 = 143;
+pub(crate) const CHROME_STATIC_VERSION: &str = "143.0.7499.42";
 
 #[cfg(not(feature = "std"))]
 // Fallback if build script wasn't run — define the constant with default data
-#[allow(dead_code)]
-pub static CHROME_VERSIONS_BY_MAJOR: phf::Map<&'static str, &'static [&'static str]> = phf::phf_map! {
-    "latest" => &[CHROME_STATIC_VERSION],
-};
+include!("../chrome_versions.rs.fallback");
 
 lazy_static::lazy_static! {
     // Get the latest chrome version as the base to use.

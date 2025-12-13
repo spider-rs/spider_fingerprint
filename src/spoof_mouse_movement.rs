@@ -97,22 +97,12 @@ impl BezierMouse {
 
         let xvals: Vec<f64> = polynomial_array
             .iter()
-            .map(|poly| {
-                poly.iter()
-                    .zip(&xpoints)
-                    .map(|(&p, &x)| (p * x as f64))
-                    .sum()
-            })
+            .map(|poly| poly.iter().zip(&xpoints).map(|(&p, &x)| p * x as f64).sum())
             .collect();
 
         let yvals: Vec<f64> = polynomial_array
             .iter()
-            .map(|poly| {
-                poly.iter()
-                    .zip(&ypoints)
-                    .map(|(&p, &y)| (p * y as f64))
-                    .sum()
-            })
+            .map(|poly| poly.iter().zip(&ypoints).map(|(&p, &y)| p * y as f64).sum())
             .collect();
 
         xvals.into_iter().zip(yvals.into_iter()).collect()

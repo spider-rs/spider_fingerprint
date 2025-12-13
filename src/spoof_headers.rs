@@ -429,10 +429,14 @@ pub fn emulate_headers(
             );
 
             // 3. sec-ch-ua group
-            if let Ok(sec_ch_ua) =
-                HeaderValue::from_str(&parse_user_agent_to_ch_ua(user_agent, false, linux_agent))
-            {
-                insert_or_default!("sec-ch-ua", sec_ch_ua);
+            if !user_agent.is_empty() {
+                if let Ok(sec_ch_ua) = HeaderValue::from_str(&parse_user_agent_to_ch_ua(
+                    user_agent,
+                    false,
+                    linux_agent,
+                )) {
+                    insert_or_default!("sec-ch-ua", sec_ch_ua);
+                }
             }
             insert_or_default!(
                 "sec-ch-ua-mobile",
@@ -460,8 +464,10 @@ pub fn emulate_headers(
                 );
             }
             // 5. User-Agent
-            if let Ok(ua) = HeaderValue::from_str(user_agent) {
-                insert_or_default!(&useragent_header.as_header_name(), ua);
+            if !user_agent.is_empty() {
+                if let Ok(ua) = HeaderValue::from_str(user_agent) {
+                    insert_or_default!(&useragent_header.as_header_name(), ua);
+                }
             }
             // 6. Accept
             insert_or_default!(

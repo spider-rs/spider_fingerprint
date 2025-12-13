@@ -305,19 +305,52 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
         ("x86", "".to_string(), "Unknown", "1.0.0".to_string(), "64")
     };
 
+    // generator a new full version.
+    let full_version = smart_spoof_chrome_full_version(full_version);
+
     // chrome canary order - Not, Chromium, and "Google Chrome ( use a flag for it. )
     // base canary is released 2 versions ahead of chrome.
     // canary not a brand starts at 8.0 while normal chrome "99"
     // we need to spoof this for firefox.
-    let full_version_list = if chrome_major == 141 {
+    let full_version_list = if chrome_major == 143 {
         vec![
             BrandEntry {
                 brand: "Google Chrome".into(),
-                version: full_version.into(),
+                version: full_version.clone(),
             },
             BrandEntry {
                 brand: "Chromium".into(),
-                version: full_version.into(),
+                version: full_version.clone(),
+            },
+            BrandEntry {
+                brand: "Not A(Brand".into(),
+                version: "24.0.0.0".into(),
+            },
+        ]
+    } else if chrome_major == 142 {
+        vec![
+            BrandEntry {
+                brand: "Chromium".into(),
+                version: full_version.clone(),
+            },
+            BrandEntry {
+                brand: "Google Chrome".into(),
+                version: full_version.clone(),
+            },
+            BrandEntry {
+                brand: "Not_A Brand".into(),
+                version: "99.0.0.0".into(),
+            },
+        ]
+    } else if chrome_major == 141 {
+        vec![
+            BrandEntry {
+                brand: "Google Chrome".into(),
+                version: full_version.clone(),
+            },
+            BrandEntry {
+                brand: "Chromium".into(),
+                version: full_version.clone(),
             },
             BrandEntry {
                 brand: "Not?A_Brand".into(),
@@ -328,11 +361,11 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
         vec![
             BrandEntry {
                 brand: "Chromium".into(),
-                version: full_version.into(),
+                version: full_version.clone(),
             },
             BrandEntry {
                 brand: "Google Chrome".into(),
-                version: full_version.into(),
+                version: full_version.clone(),
             },
             BrandEntry {
                 brand: if older_brand {
@@ -362,7 +395,7 @@ pub fn build_high_entropy_data(user_agent: &Option<&str>) -> HighEntropyUaData {
         platform: platform.to_string(),
         platform_version,
         full_version_list,
-        ua_full_version: smart_spoof_chrome_full_version(full_version),
+        ua_full_version: full_version,
         mobile: mobile_device,
         wow64_ness: false,
     }
