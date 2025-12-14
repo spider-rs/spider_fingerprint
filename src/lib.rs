@@ -414,7 +414,11 @@ fn build_stealth_script_base(
         worker_override(gpu_profile.webgl_vendor, gpu_profile.webgl_renderer)
     };
 
-    let spoof_concurrency = spoof_hardware_concurrency(gpu_profile.hardware_concurrency);
+    let spoof_concurrency = if concurrency {
+        spoof_hardware_concurrency(gpu_profile.hardware_concurrency)
+    } else {
+        Default::default()
+    };
 
     let gpu_limit = GpuLimits::for_os(os).with_variation(gpu_profile.hardware_concurrency);
 
@@ -431,53 +435,53 @@ fn build_stealth_script_base(
     match tier {
         Tier::Basic | Tier::BasicNoWorker | Tier::BasicNoExtra => {
             format!(
-                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}"#
+                r#"{chrome_spoof};{HIDE_CONSOLE};{spoof_worker};{spoof_gpu_adapter};{NAVIGATOR_SCRIPT}"#
             )
         }
         Tier::BasicWithConsole => {
             format!(
-                r#"{chrome_spoof}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}"#
+                r#"{chrome_spoof};{spoof_worker};{spoof_concurrency};{spoof_gpu_adapter};{NAVIGATOR_SCRIPT}"#
             )
         }
         Tier::BasicNoWebgl | Tier::BasicNoWebglWithGPU | Tier::BasicNoWebglWithGPUNoExtra => {
             format!(
-                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{NAVIGATOR_SCRIPT}"#
+                r#"{chrome_spoof};{HIDE_CONSOLE};{spoof_worker};{spoof_concurrency};{NAVIGATOR_SCRIPT}"#
             )
         }
         Tier::BasicNoWebglWithGPUcWithConsole => {
-            format!(r#"{chrome_spoof}{spoof_worker}{spoof_concurrency}{NAVIGATOR_SCRIPT}"#)
+            format!(r#"{chrome_spoof};{spoof_worker};{spoof_concurrency};{NAVIGATOR_SCRIPT}"#)
         }
         Tier::HideOnly => {
-            format!(r#"{chrome_spoof}{HIDE_CONSOLE}{HIDE_WEBDRIVER}"#)
+            format!(r#"{chrome_spoof};{HIDE_CONSOLE};{HIDE_WEBDRIVER}"#)
         }
         Tier::HideOnlyWithConsole => {
-            format!(r#"{chrome_spoof}{HIDE_WEBDRIVER}"#)
+            format!(r#"{chrome_spoof};{HIDE_WEBDRIVER}"#)
         }
         Tier::HideOnlyChrome => chrome_spoof.into(),
         Tier::Low => {
             format!(
-                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}"#
+                r#"{chrome_spoof};{HIDE_CONSOLE};{spoof_worker};{spoof_concurrency};{spoof_gpu_adapter};{HIDE_WEBDRIVER}"#
             )
         }
         Tier::LowWithPlugins => {
             format!(
-                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}"#
+                r#"{chrome_spoof};{HIDE_CONSOLE};{spoof_worker};{spoof_concurrency};{spoof_gpu_adapter};{HIDE_WEBDRIVER}"#
             )
         }
         Tier::LowWithNavigator => {
             format!(
-                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}{NAVIGATOR_SCRIPT}"#
+                r#"{chrome_spoof};{HIDE_CONSOLE};{spoof_worker};{spoof_concurrency};{spoof_gpu_adapter};{HIDE_WEBDRIVER};{NAVIGATOR_SCRIPT}"#
             )
         }
         Tier::Mid => {
             format!(
-                r#"{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{NAVIGATOR_SCRIPT}{HIDE_WEBDRIVER}"#
+                r#"{chrome_spoof};{HIDE_CONSOLE};{spoof_worker};{spoof_concurrency};{spoof_gpu_adapter};{NAVIGATOR_SCRIPT};{HIDE_WEBDRIVER}"#
             )
         }
         Tier::Full => {
             let spoof_gpu = build_gpu_spoof_script_wgsl(gpu_profile.canvas_format);
 
-            format!("{chrome_spoof}{HIDE_CONSOLE}{spoof_worker}{spoof_concurrency}{spoof_gpu_adapter}{HIDE_WEBDRIVER}{NAVIGATOR_SCRIPT}{spoof_gpu}")
+            format!("{chrome_spoof};{HIDE_CONSOLE};{spoof_worker};{spoof_concurrency};{spoof_gpu_adapter};{HIDE_WEBDRIVER};{NAVIGATOR_SCRIPT};{spoof_gpu}")
         }
         _ => Default::default(),
     }
@@ -709,8 +713,8 @@ pub fn emulate_base(
         config.agent_os
     };
     let spoof_user_agent_data = if stealth
-        && ua_allows_gethighentropy(user_agent)
         && config.user_agent_data.unwrap_or(true)
+        && ua_allows_gethighentropy(user_agent)
     {
         &crate::spoof_user_agent::spoof_user_agent_data_high_entropy_values(
             &crate::spoof_user_agent::build_high_entropy_data(&Some(user_agent)),
@@ -718,6 +722,7 @@ pub fn emulate_base(
     } else {
         &Default::default()
     };
+
     let spoof_speech_syn = if stealth && agent_os != AgentOs::Unknown {
         PATCH_SPEECH_SYNTHESIS
     } else {
@@ -936,10 +941,12 @@ mod tests {
     #[test]
     fn emulation() {
         let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
-        let config = EmulationConfiguration::default();
-        std::env::set_var("CHROME_VERSION_FULL", "139.0.7258.67");
+        let config: EmulationConfiguration = EmulationConfiguration::setup_defaults(&ua);
         let data = emulate(ua, &config, &None, &None);
-        assert!(data.is_some())
+        assert!(data.is_some());
+        if let Some(data) = data {
+            println!("{}", data);
+        }
     }
 
     #[test]

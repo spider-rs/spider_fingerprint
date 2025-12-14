@@ -1,7 +1,7 @@
 // use https://github.com/spider-rs/headless-browser for ideal default settings.
 
 pub use super::spoof_webgl::{HIDE_WEBGL, HIDE_WEBGL_MAC};
-use crate::{configs::AgentOs, spoof_referrer, spoof_webgl::hide_webgl_worker_script};
+use crate::{configs::AgentOs, spoof_referrer};
 use rand::Rng;
 
 /// Spoof window.chrome identical.
@@ -18,7 +18,8 @@ pub const DISABLE_DIALOGS: &str  = "(()=>{const a=window.alert.toString(),c=wind
 pub const HIDE_WEBDRIVER: &str = r#"(()=>{if(!navigator.webdriver){return}; const r=Function.prototype.toString,g=()=>false;Function.prototype.toString=function(){return this===g?'function get webdriver() { [native code] }':r.call(this)};Object.defineProperty(Navigator.prototype,'webdriver',{get:g,enumerable:false,configurable:true})})();"#;
 
 /// Navigator include pdfViewerEnabled.
-pub const NAVIGATOR_SCRIPT: &str = r#"(()=>{if('pdfViewerEnabled' in navigator){return};const nativeGet=new Function("return true");Object.defineProperty(nativeGet,'toString',{value:()=>"function get pdfViewerEnabled() { [native code] }"});Object.defineProperty(Navigator.prototype,"pdfViewerEnabled",{get:nativeGet,configurable:!0});})();"#;
+pub const NAVIGATOR_SCRIPT: &str = r#"(()=>{try{if(typeof navigator==='undefined')return;if('pdfViewerEnabled'in navigator)return;const p=Object.getPrototypeOf(navigator);if(!p)return;const g=function(){return!0};try{Object.defineProperty(g,'toString',{value:()=>"function get pdfViewerEnabled() { [native code] }",configurable:!0})}catch(_){}try{Object.defineProperty(p,'pdfViewerEnabled',{get:g,configurable:!0})}catch(_){} }catch(_){}})();"#;
+
 /// Plugin extension. (incomplete)
 pub const PLUGIN_AND_MIMETYPE_SPOOF: &str = r#"(()=>{if('plugins' in navigator && navigator.plugins.length){return};const m=[{type:'application/pdf',suffixes:'pdf',description:'Portable Document Format'},{type:'text/pdf',suffixes:'pdf',description:'Portable Document Format'}],names=['PDF Viewer','Chrome PDF Viewer','Chromium PDF Viewer','Microsoft Edge PDF Viewer','WebKit built-in PDF'],plugins=[],mimes=[];names.forEach(name=>{const plugin=Object.create(Plugin.prototype);Object.defineProperties(plugin,{name:{value:name},description:{value:'Portable Document Format'},filename:{value:'internal-pdf-viewer'},length:{value:2}});const mt1=Object.create(MimeType.prototype),mt2=Object.create(MimeType.prototype);Object.defineProperties(mt1,{type:{value:m[0].type},suffixes:{value:m[0].suffixes},description:{value:m[0].description},enabledPlugin:{value:plugin}});Object.defineProperties(mt2,{type:{value:m[1].type},suffixes:{value:m[1].suffixes},description:{value:m[1].description},enabledPlugin:{value:plugin}});plugin[0]=mt1;plugin[1]=mt2;mimes.push(mt1,mt2);plugins.push(plugin)});Object.defineProperties(PluginArray.prototype,{item:{value:function(i){return this[i]||null}},namedItem:{value:function(n){return this[n]||null}},toJSON:{value:function(){return[...Array(this.length)].map((_,i)=>this[i])}}});Object.defineProperties(MimeTypeArray.prototype,{item:{value:function(i){return this[i]||null}},namedItem:{value:function(n){return this[n]||null}}});const pa=Object.create(PluginArray.prototype),ma=Object.create(MimeTypeArray.prototype);plugins.forEach((p,i)=>{Object.defineProperty(pa,i,{value:p,enumerable:true});Object.defineProperty(pa,p.name,{value:p})});Object.defineProperty(pa,'length',{value:plugins.length,enumerable:false});const seen=new Set();mimes.forEach((mt,i)=>{Object.defineProperty(ma,i,{value:mt,enumerable:true});if(!seen.has(mt.type)){seen.add(mt.type);Object.defineProperty(ma,mt.type,{value:mt})}});Object.defineProperty(ma,'length',{value:mimes.length,enumerable:false});const g=(v,n)=>{const f=()=>v;Object.defineProperty(f,'toString',{value:()=>`function get ${n}() { [native code] }`});return f};Object.defineProperties(Navigator.prototype,{plugins:{get:g(pa,'plugins')},mimeTypes:{get:g(ma,'mimeTypes')}})})();"#;
 pub const PLUGIN_AND_MIMETYPE_SPOOF_CHROME: &str = r#"(()=>{if('plugins'in navigator&&navigator.plugins.length)return;const M=[{type:'application/pdf',suffixes:'pdf',description:'Portable Document Format'},{type:'text/pdf',suffixes:'pdf',description:'Portable Document Format'}],N=['PDF Viewer','Chrome PDF Viewer','Chromium PDF Viewer','Microsoft Edge PDF Viewer','WebKit built-in PDF'];const nat=(v,n)=>{const g=function(){return v};Object.defineProperty(g,'toString',{value:()=>`function get ${n}() { [native code] }`});return g},nfun=(name,impl)=>{const f=function(...a){return impl.apply(this,a)};Object.defineProperty(f,'name',{value:name});Object.defineProperty(f,'toString',{value:()=>`function ${name}() { [native code] }`});return f};Object.defineProperties(PluginArray.prototype,{item:{value:nfun('item',function(i){return this[i]??null}),writable:!0,configurable:!0},namedItem:{value:nfun('namedItem',function(n){return this[n]??null}),writable:!0,configurable:!0},refresh:{value:nfun('refresh',function(){}),writable:!0,configurable:!0}});Object.defineProperties(MimeTypeArray.prototype,{item:{value:nfun('item',function(i){return this[i]??null}),writable:!0,configurable:!0},namedItem:{value:nfun('namedItem',function(n){return this[n]??null}),writable:!0,configurable:!0}});const pa=Object.create(PluginArray.prototype),ma=Object.create(MimeTypeArray.prototype);let m=0;for(let i=0;i<N.length;i++){const p=Object.create(Plugin.prototype),mt0=Object.create(MimeType.prototype),d0=M[0];Object.defineProperties(mt0,{type:{value:d0.type,enumerable:!0},suffixes:{value:d0.suffixes,enumerable:!0},description:{value:d0.description,enumerable:!0},enabledPlugin:{value:p}});const mt1=Object.create(MimeType.prototype),d1=M[1];Object.defineProperties(mt1,{type:{value:d1.type,enumerable:!0},suffixes:{value:d1.suffixes,enumerable:!0},description:{value:d1.description,enumerable:!0},enabledPlugin:{value:p}});/* indices first */Object.defineProperty(p,0,{value:mt0,enumerable:!0});Object.defineProperty(p,1,{value:mt1,enumerable:!0});/* lighter aliases next */Object.defineProperty(p,'application/pdf',{value:mt0,enumerable:!1});Object.defineProperty(p,'text/pdf',{value:mt1,enumerable:!1});Object.defineProperties(p,{description:{value:'Portable Document Format',enumerable:!0,configurable:!1,writable:!1},filename:{value:'internal-pdf-viewer',enumerable:!0,configurable:!1,writable:!1},length:{value:2,enumerable:!0,configurable:!1,writable:!1},name:{value:N[i],enumerable:!0,configurable:!1,writable:!1}});Object.defineProperty(ma,m++,{value:mt0,enumerable:!0});Object.defineProperty(ma,m++,{value:mt1,enumerable:!0});'application/pdf'in ma||Object.defineProperty(ma,'application/pdf',{value:mt0});'text/pdf'in ma||Object.defineProperty(ma,'text/pdf',{value:mt1});Object.defineProperty(pa,i,{value:p,enumerable:!0});N[i]in pa||Object.defineProperty(pa,N[i],{value:p})}Object.defineProperty(pa,'length',{value:N.length});Object.defineProperty(ma,'length',{value:m});Object.defineProperties(Navigator.prototype,{plugins:{get:nat(pa,'plugins')},mimeTypes:{get:nat(ma,'mimeTypes')}})})();"#;
@@ -60,7 +61,7 @@ pub fn spoof_media_labels_script(agent_os: AgentOs) -> String {
     };
 
     format!(
-        r#"(()=>{{const e=navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);navigator.mediaDevices.enumerateDevices=()=>e().then(d=>d.map(v=>{{let l=v.label;if(typeof l==="string"){{if(l.startsWith("Fake "))l=l.replace(/^Fake\s+/i,"");if(v.kind==="videoinput"&&/^fake(_device)?/i.test(l))l="{label}";const g=new Function(`return "${{l}}"`);Object.defineProperty(g,"toString",{{value:()=>`function get label() {{ [native code] }}`}});Object.defineProperty(v,"label",{{get:g,configurable:true}})}}return v}}))}})();"#,
+        r#"(()=>{{try{{if(typeof navigator==="undefined")return;const n=navigator,md=n.mediaDevices;if(!md)return;const o=md.enumerateDevices;if(typeof o!=="function")return;const e=o.bind(md);const nat=fn=>{{try{{Object.defineProperty(fn,"toString",{{value:()=>`function get label() {{ [native code] }}`,configurable:!0}})}}catch(_ ){{}}return fn}};const wrap=function(){{return e().then(d=>d.map(v=>{{try{{if(!v||typeof v!=="object")return v;let l=v.label;if(typeof l==="string"){{if(l.startsWith("Fake "))l=l.replace(/^Fake\s+/i,"");if(v.kind==="videoinput"&&/^fake(_device)?/i.test(l))l="{label}";const esc=(""+l).replace(/\\/g,"\\\\").replace(/"/g,"\\\"");const g=nat(new Function('return "'+esc+'"'));try{{Object.defineProperty(v,"label",{{get:g,configurable:!0}})}}catch(_ ){{}}}}}}catch(_ ){{}}return v}}))}};try{{Object.defineProperty(md,"enumerateDevices",{{value:wrap,writable:!0,configurable:!0}})}}catch(_ ){{try{{md.enumerateDevices=wrap}}catch(_ ){{}}}}}}catch(_ ){{}}}})();"#,
         label = camera_label
     )
 }
@@ -209,48 +210,120 @@ pub fn spoof_hardware_concurrency(concurrency: usize) -> String {
     )
 }
 
-/// Unified worker hardware and webgl.
+#[inline]
+fn js_escape_dq(s: &str) -> String {
+    let mut o = String::with_capacity(s.len() + 16);
+    for ch in s.chars() {
+        match ch {
+            '\\' => o.push_str("\\\\"),
+            '"' => o.push_str("\\\""),
+            '\n' => o.push_str("\\n"),
+            '\r' => o.push_str("\\r"),
+            '\u{2028}' => o.push_str("\\u2028"),
+            '\u{2029}' => o.push_str("\\u2029"),
+            _ => o.push(ch),
+        }
+    }
+    o
+}
+
+/// Escape for a single-quoted JS string literal.
+#[inline]
+fn js_quote_sq(s: &str) -> String {
+    let mut o = String::with_capacity(s.len() + 2);
+    o.push('\'');
+    for ch in s.chars() {
+        match ch {
+            '\\' => o.push_str("\\\\"),
+            '\'' => o.push_str("\\'"),
+            '\n' => o.push_str("\\n"),
+            '\r' => o.push_str("\\r"),
+            '\u{2028}' => o.push_str("\\u2028"),
+            '\u{2029}' => o.push_str("\\u2029"),
+            _ => o.push(ch),
+        }
+    }
+    o.push('\'');
+    o
+}
+
+/// Minified WebGL vendor/renderer patch (works in window + workers).
+#[inline]
+fn webgl_patch_min(vendor: &str, renderer: &str) -> String {
+    let v = js_quote_sq(vendor);
+    let r = js_quote_sq(renderer);
+    let mut s = String::with_capacity(v.len() + r.len() + 260);
+    s.push_str("try{const v=");
+    s.push_str(&v);
+    s.push_str(",r=");
+    s.push_str(&r);
+    s.push_str(",f=p=>p===37445?v:p===37446?r:null;for(const k of['WebGLRenderingContext','WebGL2RenderingContext']){const o=self[k]&&self[k].prototype&&self[k].prototype.getParameter;if(o)Object.defineProperty(self[k].prototype,'getParameter',{value:function(p){const s=f(p);return s??o.call(this,p)},configurable:!0})}}catch(_){ }");
+    s
+}
+
+/// Minified “set hardwareConcurrency” (worker-side only).
+#[inline]
+fn worker_hc_set_min(concurrency: usize) -> String {
+    format!(
+        "try{{Object.defineProperty(navigator,'hardwareConcurrency',{{get:()=>{c},enumerable:!0,configurable:!0}})}}catch(e){{try{{navigator.hardwareConcurrency={c}}}catch(_){{}}}}",
+        c = concurrency
+    )
+}
+/// Production-minified unified wrapper:
+/// - patches WebGL in window (optional)
+/// - wraps Worker + SharedWorker (classic, same-origin http/https only)
+/// - in worker: applies hc + WebGL (optional), then importScripts(abs) synchronously
 pub fn unified_worker_override(
     concurrency: usize,
     vendor: &str,
     renderer: &str,
     webgl: bool,
 ) -> String {
-    let escaped_vendor = vendor.replace('\'', "\\'");
-    let escaped_renderer = renderer.replace('\'', "\\'");
-
-    let hc_worker_script = spoof_hardware_concurrency(concurrency);
-    let gpu_worker_script = if webgl {
-        hide_webgl_worker_script(&escaped_vendor, &escaped_renderer)
+    // top-level patches (executed in window)
+    let main_webgl = if webgl {
+        webgl_patch_min(vendor, renderer)
     } else {
-        Default::default()
+        String::new()
     };
 
-    let combined_worker_script = format!(
-        r#"try {{ Object.defineProperty(navigator,'hardwareConcurrency', {{ get:()=>{concurrency},enumerable: true, configurable: true }});}} catch(e){{ navigator.hardwareConcurrency = {concurrency}; }} {gpu_script};"#,
-        concurrency = concurrency,
-        gpu_script = gpu_worker_script
-    );
+    // code executed *inside* the worker before importScripts
+    let mut pre = String::with_capacity(512);
+    pre.push_str(&worker_hc_set_min(concurrency));
+    if webgl {
+        pre.push(';');
+        pre.push_str(&webgl_patch_min(vendor, renderer));
+    }
+    let pre_esc = js_escape_dq(&pre);
 
-    format!(
-        r#"(()=>{{{hc_script};{gpu_script};const wrap=W=>function(u,...a){{const abs=new URL(u,location.href).toString(),b=`(()=>{{{combined_script};fetch("${{abs}}").then(r=>r.text()).then(t=>(0,eval)(t));}})();`;return new W(URL.createObjectURL(new Blob([b],{{type:'application/javascript'}})),...a)}};window.Worker=wrap(window.Worker);window.SharedWorker=wrap(window.SharedWorker);}})();"#,
-        hc_script = hc_worker_script,
-        gpu_script = gpu_worker_script,
-        combined_script = combined_worker_script
-    )
+    // minified wrapper
+    let mut out = String::with_capacity(2048 + main_webgl.len() + pre_esc.len());
+    out.push_str("(()=>{try{");
+    if !main_webgl.is_empty() {
+        out.push_str(&main_webgl);
+        out.push(';');
+    }
+    out.push_str("const P=\"");
+    out.push_str(&pre_esc);
+    out.push_str("\";const mk=C=>function(u,...a){try{const o=a[0];if(o&&typeof o==\"object\"&&o.type==\"module\")return new C(u,...a)}catch(_){ }let U;try{U=new URL(u,location.href)}catch(_){return new C(u,...a)}if(U.protocol!==\"http:\"&&U.protocol!==\"https:\")return new C(u,...a);if(U.origin!==location.origin)return new C(u,...a);const abs=U.toString(),b=\"(()=>{\"+P+\";try{importScripts(\"+JSON.stringify(abs)+\")}catch(_){}})();\";return new C(URL.createObjectURL(new Blob([b],{type:\"text/javascript\"})),...a)};window.Worker&&(window.Worker=mk(window.Worker));window.SharedWorker&&(window.SharedWorker=mk(window.SharedWorker))}catch(_){}})();");
+    out
 }
 
-/// Worker override webgl.
+/// Production-minified WebGL-only wrapper:
+/// - patches WebGL in window
+/// - wraps Worker + SharedWorker (classic, same-origin http/https only)
+/// - in worker: applies WebGL patch then importScripts(abs)
 pub fn worker_override(vendor: &str, renderer: &str) -> String {
-    let escaped_vendor = vendor.replace('\'', "\\'");
-    let escaped_renderer = renderer.replace('\'', "\\'");
+    let main_webgl = webgl_patch_min(vendor, renderer);
+    let pre = webgl_patch_min(vendor, renderer);
+    let pre_esc = js_escape_dq(&pre);
 
-    let gpu_worker_script = hide_webgl_worker_script(&escaped_vendor, &escaped_renderer);
-
-    format!(
-        r#"(()=>{{{gpu_script};const wrap=W=>function(u,...a){{const abs=new URL(u,location.href).toString(),b=`(()=>{{{gpu_script};fetch("${{abs}}").then(r=>r.text()).then(t=>(0,eval)(t));}})();`;return new W(URL.createObjectURL(new Blob([b],{{type:'application/javascript'}})),...a)}};window.Worker=wrap(window.Worker);window.SharedWorker=wrap(window.SharedWorker);}})();"#,
-        gpu_script = gpu_worker_script,
-    )
+    let mut out = String::with_capacity(2048 + main_webgl.len() + pre_esc.len());
+    out.push_str("(()=>{try{");
+    out.push_str(&main_webgl);
+    out.push_str(";const P=\"");
+    out.push_str(&pre_esc);
+    out.push_str("\";const mk=C=>function(u,...a){try{const o=a[0];if(o&&typeof o==\"object\"&&o.type==\"module\")return new C(u,...a)}catch(_){ }let U;try{U=new URL(u,location.href)}catch(_){return new C(u,...a)}if(U.protocol!==\"http:\"&&U.protocol!==\"https:\")return new C(u,...a);if(U.origin!==location.origin)return new C(u,...a);const abs=U.toString(),b=\"(()=>{\"+P+\";try{importScripts(\"+JSON.stringify(abs)+\")}catch(_){}})();\";return new C(URL.createObjectURL(new Blob([b],{type:\"text/javascript\"})),...a)};window.Worker&&(window.Worker=mk(window.Worker));window.SharedWorker&&(window.SharedWorker=mk(window.SharedWorker))}catch(_){}})();");
+    out
 }
 
 /// Spoof the referer for the document.

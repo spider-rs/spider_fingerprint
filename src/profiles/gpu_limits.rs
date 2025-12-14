@@ -263,6 +263,7 @@ impl GpuLimits {
     }
 }
 
+/// Build gpu request adapter
 pub fn build_gpu_request_adapter_script_from_limits(
     vendor: &str,
     architecture: &str,
@@ -311,6 +312,8 @@ pub fn build_gpu_request_adapter_script_from_limits(
     );
 
     format!(
-        r#"(()=>{{const def=(o,m)=>Object.defineProperties(o,Object.fromEntries(Object.entries(m).map(([k,v])=>[k,{{value:v,enumerable:true,configurable:true}}]))),orig=navigator.gpu.requestAdapter.bind(navigator.gpu),I={{ {info} }},M={{ {limits_str} }};navigator.gpu.requestAdapter=async opts=>{{const a=await orig(opts),lim=a.limits;def(a.info,I);for(const k of Object.getOwnPropertyNames(lim))if(!(k in M))delete lim[k];def(lim,M);return a}}}})();"#
+        r#"(()=>{{try{{const g=navigator&&navigator.gpu;if(!g||typeof g.requestAdapter!=="function")return;const def=(o,m)=>Object.defineProperties(o,Object.fromEntries(Object.entries(m).map(([k,v])=>[k,{{value:v,enumerable:!0,configurable:!0}}]))),orig=g.requestAdapter.bind(g),I={{{info}}},M={{{limits_str}}};g.requestAdapter=async opts=>{{const a=await orig(opts);if(!a||!a.limits)return a;const lim=a.limits;try{{a.info&&def(a.info,I)}}catch(_){{}}try{{for(const k of Object.getOwnPropertyNames(lim))if(!(k in M))delete lim[k];def(lim,M)}}catch(_){{}}return a}}}}catch(_){{}}}})();"#,
+        info = info,
+        limits_str = limits_str
     )
 }
