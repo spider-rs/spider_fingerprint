@@ -5,3 +5,5 @@ Cargo.lock
 .DS_Store
 # private testing auth and etc
 tests/private.rs
+src/.DS_Store
+assets/.DS_Store

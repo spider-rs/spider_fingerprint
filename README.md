@@ -15,6 +15,7 @@ It is recommended to use this project with [headless-browser](https://github.com
 - WebGL and GPU spoofing (WIP)
 - `navigator.userAgentData` high entropy value support
 - Plugin and mimeType spoofing
+- Real referrer generation over 1 million domains
 - Optional mouse and viewport spoofing
 - Platform-specific variants (macOS, Windows, Linux)
 

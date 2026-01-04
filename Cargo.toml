@@ -1,6 +1,6 @@
 [package]
 name = "spider_fingerprint"
-version = "2.37.229"
+version = "2.37.231"
 authors = ["j-mendez <jeff@spider.cloud>"]
 description = "Fingerprint library for Rust."
 repository = "https://github.com/spider-rs/spider_fingerprint"
@@ -13,12 +13,14 @@ documentation = "https://docs.rs/spider_fingerprint"
 edition = "2021"
 
 include = [
-    "build.rs",
-    "chrome_versions.rs.fallback",
-    "src/**",
-    "Cargo.toml",
-    "README.md",
-    "LICENSE",
+  "src/**",
+  "assets/**",
+  "build.rs",
+  "Cargo.toml",
+  "Cargo.lock",
+  "README*",
+  "LICENSE*",
+  "chrome_versions.rs.fallback",
 ]
 
 [dependencies]
