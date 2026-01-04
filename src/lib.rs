@@ -23,6 +23,11 @@ pub mod spoof_webgl;
 /// Generic spoofs.
 pub mod spoofs;
 
+/// Referrer domains index.
+mod referrers_domains_index;
+/// High quality referrer index.
+mod referrers_hq_index;
+
 #[cfg(feature = "headers")]
 pub use spoof_headers::emulate_headers;
 pub use spoof_refererer::spoof_referrer;
