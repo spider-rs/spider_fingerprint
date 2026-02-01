@@ -357,6 +357,28 @@ pub fn spoof_referer_script_randomized_domain(domain_parsed: &url::Url) -> Strin
 // spoof unused atm for headless browser settings entry.
 pub const SPOOF_MEDIA: &str = r#"Object.defineProperty(Navigator.prototype,'mediaDevices',{get:()=>({getUserMedia:undefined}),configurable:!0,enumerable:!1}),Object.defineProperty(Navigator.prototype,'webkitGetUserMedia',{get:()=>undefined,configurable:!0,enumerable:!1}),Object.defineProperty(Navigator.prototype,'mozGetUserMedia',{get:()=>undefined,configurable:!0,enumerable:!1}),Object.defineProperty(Navigator.prototype,'getUserMedia',{get:()=>undefined,configurable:!0,enumerable:!1});"#;
 
+/// Spoof navigator.deviceMemory - commonly fingerprinted property.
+/// Returns a realistic value based on the platform (4-8 GB for desktop, 2-4 for mobile).
+/// Non-intrusive: only patches if property exists or is supported.
+pub fn spoof_device_memory(memory_gb: u8) -> String {
+    let mut s = String::with_capacity(512);
+    s.push_str(r#"(()=>{try{if(typeof navigator==='undefined')return;const m="#);
+    s.push_str(&memory_gb.to_string());
+    s.push_str(r#";const g=function(){return m};try{Object.defineProperty(g,'toString',{value:()=>`function get deviceMemory() { [native code] }`})}catch(_){}try{if('deviceMemory'in Navigator.prototype||!('deviceMemory'in navigator)){Object.defineProperty(Navigator.prototype,'deviceMemory',{get:g,enumerable:!0,configurable:!0})}}catch(_){}try{if(typeof WorkerNavigator!=='undefined'&&('deviceMemory'in WorkerNavigator.prototype||!('deviceMemory'in navigator))){Object.defineProperty(WorkerNavigator.prototype,'deviceMemory',{get:g,enumerable:!0,configurable:!0})}}catch(_){}}catch(_){}})();"#);
+    s
+}
+
+/// Clean up ChromeDriver markers (cdc_, $cdc_) that anti-bot systems detect.
+/// These properties are injected by ChromeDriver for automation control.
+/// Non-intrusive: only removes properties that match known automation patterns.
+/// Safe: wrapped in try-catch, checks property existence before removal.
+pub const CLEANUP_CDP_MARKERS: &str = r#"(()=>{try{if(typeof window==='undefined')return;const patterns=[/^cdc_/i,/^\$cdc_/i,/^__webdriver_/i,/^__selenium_/i,/^__driver_/i,/^_Selenium_/i,/^calledSelenium/i,/^domAutomation/i];const safeClean=(o,name)=>{if(!o||typeof o!=='object')return;try{const keys=Object.getOwnPropertyNames(o);for(const k of keys){for(const p of patterns){if(p.test(k)){try{const desc=Object.getOwnPropertyDescriptor(o,k);if(desc&&desc.configurable){delete o[k]}}catch(_){}break}}}}catch(_){}};safeClean(window,'window');if(typeof document!=='undefined')safeClean(document,'document')}catch(_){}})();"#;
+
+/// Hide selenium-specific markers from the window and document objects.
+/// Non-intrusive: only patches properties that actually exist on the object.
+/// Safe: all operations wrapped in try-catch, won't throw or break page.
+pub const HIDE_SELENIUM_MARKERS: &str = r#"(()=>{try{if(typeof window==='undefined')return;const props=['$chrome_asyncScriptInfo','__webdriver_evaluate','__selenium_evaluate','__webdriver_script_function','__webdriver_script_func','__webdriver_script_fn','__fxdriver_evaluate','__driver_unwrapped','__webdriver_unwrapped','__driver_evaluate','__selenium_unwrapped','__fxdriver_unwrapped','_Selenium_IDE_Recorder','_selenium','calledSelenium','_WEBDRIVER_ELEM_CACHE','ChromeDriverw'];const hide=(o)=>{if(!o||typeof o!=='object')return;for(const p of props){try{if(p in o){const desc=Object.getOwnPropertyDescriptor(o,p);if(desc&&desc.configurable){Object.defineProperty(o,p,{get:()=>undefined,configurable:!0})}}}catch(_){}}};hide(window);if(typeof document!=='undefined')hide(document)}catch(_){}})();"#;
+
 #[test]
 fn test_spoof_hardware_concurrency_output() {
     let js = spoof_hardware_concurrency(8);
@@ -375,4 +397,25 @@ fn test_spoof_hardware_concurrency_output() {
 #[test]
 fn test_spoof_plugins() {
     print!("{:?}", PLUGIN_AND_MIMETYPE_SPOOF_CHROME)
+}
+
+#[test]
+fn test_spoof_device_memory() {
+    let js = spoof_device_memory(8);
+    assert!(js.contains("const m=8"));
+    assert!(js.contains("deviceMemory"));
+    assert!(js.contains("Navigator.prototype"));
+}
+
+#[test]
+fn test_cdp_marker_cleanup() {
+    assert!(CLEANUP_CDP_MARKERS.contains("cdc_"));
+    assert!(CLEANUP_CDP_MARKERS.contains("__webdriver_"));
+    assert!(CLEANUP_CDP_MARKERS.contains("safeClean"));
+}
+
+#[test]
+fn test_selenium_marker_cleanup() {
+    assert!(HIDE_SELENIUM_MARKERS.contains("__selenium_evaluate"));
+    assert!(HIDE_SELENIUM_MARKERS.contains("_Selenium_IDE_Recorder"));
 }

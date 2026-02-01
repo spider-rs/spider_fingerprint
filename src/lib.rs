@@ -37,15 +37,16 @@ use profiles::{
     gpu::{select_random_gpu_profile, GpuProfile},
     gpu_limits::{build_gpu_request_adapter_script_from_limits, GpuLimits},
 };
+use rand::prelude::IndexedRandom;
 use rand::Rng;
 use spoof_gpu::{
     build_gpu_spoof_script_wgsl, FP_JS, FP_JS_GPU_LINUX, FP_JS_GPU_MAC, FP_JS_GPU_WINDOWS,
     FP_JS_LINUX, FP_JS_MAC, FP_JS_WINDOWS,
 };
 use spoofs::{
-    resolve_dpr, spoof_history_length_script, spoof_media_codecs_script, spoof_media_labels_script,
-    spoof_screen_script_rng, spoof_touch_screen, DISABLE_DIALOGS, SPOOF_NOTIFICATIONS,
-    SPOOF_PERMISSIONS_QUERY,
+    resolve_dpr, spoof_device_memory, spoof_history_length_script, spoof_media_codecs_script,
+    spoof_media_labels_script, spoof_screen_script_rng, spoof_touch_screen, CLEANUP_CDP_MARKERS,
+    DISABLE_DIALOGS, HIDE_SELENIUM_MARKERS, SPOOF_NOTIFICATIONS, SPOOF_PERMISSIONS_QUERY,
 };
 
 #[cfg(feature = "headers")]
@@ -618,6 +619,15 @@ pub struct EmulationConfiguration {
     pub disable_plugins: bool,
     /// Disable the stealth emulation.
     pub disable_stealth: bool,
+    /// Enable device memory spoofing (navigator.deviceMemory).
+    /// Disabled by default - opt-in for extra stealth.
+    pub enable_device_memory: bool,
+    /// Enable cleanup of CDP/automation markers (cdc_, $cdc_, etc).
+    /// Disabled by default - opt-in, useful when using ChromeDriver or WebDriver.
+    pub enable_cdp_marker_cleanup: bool,
+    /// Enable cleanup of Selenium-specific markers.
+    /// Disabled by default - opt-in, useful when using Selenium.
+    pub enable_selenium_marker_cleanup: bool,
 }
 
 /// Fast Chrome-only OS detection using Aho-Corasick (ASCII case-insensitive).
@@ -829,6 +839,19 @@ pub fn emulate_base(
         Default::default()
     };
 
+    // Device memory spoof (opt-in) - realistic values per platform
+    let device_memory_script = if config.enable_device_memory {
+        let memory = match agent_os {
+            AgentOs::Android | AgentOs::IPhone | AgentOs::IPad => {
+                *[2, 3, 4].choose(&mut rand::rng()).unwrap_or(&4)
+            }
+            _ => *[4, 8].choose(&mut rand::rng()).unwrap_or(&8),
+        };
+        spoof_device_memory(memory)
+    } else {
+        Default::default()
+    };
+
     let stealth_scripts = if stealth {
         join_scripts([
             if no_extra || config.disable_speech_syntheses {
@@ -885,6 +908,18 @@ pub fn emulate_base(
                 Default::default()
             } else {
                 plugin_spoof
+            },
+            // Opt-in spoofs for extra stealth (non-intrusive, safe across profiles)
+            &device_memory_script,
+            if config.enable_cdp_marker_cleanup {
+                CLEANUP_CDP_MARKERS
+            } else {
+                ""
+            },
+            if config.enable_selenium_marker_cleanup {
+                HIDE_SELENIUM_MARKERS
+            } else {
+                ""
             },
             &if config.disable_stealth {
                 Default::default()
