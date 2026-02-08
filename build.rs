@@ -5,7 +5,7 @@
 // - REFERRERS_TRIM_TO_1M=1        => cap merged_referrers to 1,000,000 entries
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     fs,
     io::{self, BufRead, BufReader, Write},
     path::{Path, PathBuf},
@@ -691,6 +691,7 @@ fn main() {
     gen_assets_if_enabled();
 
     // Existing chrome dynamic versions logic (unchanged)
+    use std::collections::BTreeMap;
     use std::fs::{copy, rename, File};
     use std::io::BufWriter;
 
