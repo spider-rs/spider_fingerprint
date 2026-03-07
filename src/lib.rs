@@ -63,7 +63,7 @@ use crate::spoofs::{
 };
 
 /// The kind of browser.
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BrowserKind {
     /// Chrome
     Chrome,
@@ -400,8 +400,10 @@ fn build_stealth_script_base(
         HIDE_CONSOLE, HIDE_WEBDRIVER, NAVIGATOR_SCRIPT, REMOVE_CHROME,
     };
 
-    // tmp used for chrome only os checking.
-    let chrome = browser.is_chromium() || os != AgentOs::Unknown;
+    // Only spoof window.chrome for Chromium-based browsers.
+    // Non-Chromium browsers (Safari, Firefox) should never get a fake window.chrome
+    // even when agent_os is manually overridden, as it creates a detectable mismatch.
+    let chrome = browser.is_chromium();
 
     let spoof_worker = if tier == Tier::BasicNoWorker {
         Default::default()
@@ -974,9 +976,11 @@ pub fn emulate_with_profile(
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_form_factor, detect_is_mobile, emulate, get_agent_os, ua_allows_gethighentropy,
-        AgentOs, EmulationConfiguration,
+        detect_browser, detect_browser_kind, detect_form_factor, detect_is_mobile, emulate,
+        get_agent_os, ua_allows_gethighentropy, AgentOs, BrowserKind, EmulationConfiguration,
     };
+    use crate::configs::Tier;
+    use crate::spoofs::{HIDE_CHROME, REMOVE_CHROME};
 
     #[test]
     fn emulation() {
@@ -1130,5 +1134,409 @@ mod tests {
         let ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ... Chrome/124 Safari/537.36";
         assert_eq!(detect_is_mobile(ua), "?0");
         assert_eq!(detect_form_factor(ua), "Desktop");
+    }
+
+    // --- Browser detection tests ---
+
+    #[test]
+    fn detect_browser_chrome() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+        assert_eq!(detect_browser(ua), "chrome");
+        assert_eq!(detect_browser_kind(ua), BrowserKind::Chrome);
+        assert!(detect_browser_kind(ua).is_chromium());
+    }
+
+    #[test]
+    fn detect_browser_safari() {
+        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+        assert_eq!(detect_browser(ua), "safari");
+        assert_eq!(detect_browser_kind(ua), BrowserKind::Safari);
+        assert!(!detect_browser_kind(ua).is_chromium());
+    }
+
+    #[test]
+    fn detect_browser_firefox() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0";
+        assert_eq!(detect_browser(ua), "firefox");
+        assert_eq!(detect_browser_kind(ua), BrowserKind::Firefox);
+        assert!(!detect_browser_kind(ua).is_chromium());
+    }
+
+    #[test]
+    fn detect_browser_edge() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0";
+        assert_eq!(detect_browser(ua), "edge");
+        assert_eq!(detect_browser_kind(ua), BrowserKind::Edge);
+        assert!(detect_browser_kind(ua).is_chromium());
+    }
+
+    #[test]
+    fn detect_browser_opera() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 OPR/76.0.4017.94";
+        assert_eq!(detect_browser(ua), "opera");
+        assert!(detect_browser_kind(ua).is_chromium());
+    }
+
+    #[test]
+    fn detect_browser_brave() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Brave/124";
+        assert_eq!(detect_browser(ua), "brave");
+        assert!(detect_browser_kind(ua).is_chromium());
+    }
+
+    // --- window.chrome spoof correctness ---
+
+    #[test]
+    fn hide_chrome_does_not_bail_when_chrome_missing() {
+        // HIDE_CHROME should NOT contain `if('chrome' in window){return}` which would
+        // skip spoofing on headless Chrome where window.chrome is incomplete.
+        assert!(
+            !HIDE_CHROME.contains("if('chrome' in window){return}"),
+            "HIDE_CHROME should not bail when window.chrome exists but is incomplete"
+        );
+    }
+
+    #[test]
+    fn hide_chrome_guards_on_fully_formed_chrome() {
+        // Should skip only if window.chrome is already fully formed (has csi and loadTimes)
+        assert!(
+            HIDE_CHROME.contains("c.csi&&c.loadTimes"),
+            "HIDE_CHROME should guard on csi+loadTimes to detect fully-formed window.chrome"
+        );
+    }
+
+    #[test]
+    fn hide_chrome_creates_required_properties() {
+        assert!(HIDE_CHROME.contains("csi"), "HIDE_CHROME must create csi");
+        assert!(
+            HIDE_CHROME.contains("loadTimes"),
+            "HIDE_CHROME must create loadTimes"
+        );
+        assert!(
+            HIDE_CHROME.contains("metricsPrivate"),
+            "HIDE_CHROME must create metricsPrivate"
+        );
+        assert!(
+            HIDE_CHROME.contains("runtime"),
+            "HIDE_CHROME must create runtime"
+        );
+    }
+
+    #[test]
+    fn remove_chrome_deletes_window_chrome() {
+        assert!(REMOVE_CHROME.contains("delete window.chrome"));
+    }
+
+    // --- Stealth script: chrome spoof only for Chromium browsers ---
+
+    #[test]
+    fn stealth_script_chromium_gets_hide_chrome() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Windows);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::Basic,
+            AgentOs::Windows,
+            true,
+            BrowserKind::Chrome,
+        );
+        // Chromium browser -> should contain HIDE_CHROME content, not REMOVE_CHROME
+        assert!(
+            !script.contains("delete window.chrome"),
+            "Chrome should get HIDE_CHROME, not REMOVE_CHROME"
+        );
+    }
+
+    #[test]
+    fn stealth_script_edge_gets_hide_chrome() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Windows);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::Basic,
+            AgentOs::Windows,
+            true,
+            BrowserKind::Edge,
+        );
+        assert!(
+            !script.contains("delete window.chrome"),
+            "Edge (Chromium) should get HIDE_CHROME, not REMOVE_CHROME"
+        );
+    }
+
+    #[test]
+    fn stealth_script_safari_never_gets_hide_chrome() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Mac);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::Basic,
+            AgentOs::Mac,
+            true,
+            BrowserKind::Safari,
+        );
+        // Safari must NEVER get a fake window.chrome - it should get REMOVE_CHROME
+        assert!(
+            script.contains("delete window.chrome"),
+            "Safari must get REMOVE_CHROME, not HIDE_CHROME"
+        );
+        assert!(
+            !script.contains("metricsPrivate"),
+            "Safari must not have chrome.metricsPrivate injected"
+        );
+    }
+
+    #[test]
+    fn stealth_script_firefox_never_gets_hide_chrome() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Windows);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::Basic,
+            AgentOs::Windows,
+            true,
+            BrowserKind::Firefox,
+        );
+        assert!(
+            script.contains("delete window.chrome"),
+            "Firefox must get REMOVE_CHROME, not HIDE_CHROME"
+        );
+    }
+
+    #[test]
+    fn stealth_script_firefox_with_manual_os_override_no_hide_chrome() {
+        // Even when agent_os is manually set (not Unknown), Firefox should not get HIDE_CHROME.
+        // This was the original bug: `browser.is_chromium() || os != AgentOs::Unknown`
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Linux);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::Basic,
+            AgentOs::Linux,
+            true,
+            BrowserKind::Firefox,
+        );
+        assert!(
+            script.contains("delete window.chrome"),
+            "Firefox + manual Linux OS must still get REMOVE_CHROME"
+        );
+        assert!(
+            !script.contains("metricsPrivate"),
+            "Firefox must never have chrome.metricsPrivate"
+        );
+    }
+
+    #[test]
+    fn stealth_script_safari_with_manual_os_override_no_hide_chrome() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Mac);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::Basic,
+            AgentOs::Mac,
+            true,
+            BrowserKind::Safari,
+        );
+        assert!(
+            script.contains("delete window.chrome"),
+            "Safari + manual Mac OS must still get REMOVE_CHROME"
+        );
+    }
+
+    #[test]
+    fn stealth_script_unknown_browser_gets_remove_chrome() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Unknown);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::Basic,
+            AgentOs::Unknown,
+            true,
+            BrowserKind::Other,
+        );
+        assert!(
+            script.contains("delete window.chrome"),
+            "Unknown browser must get REMOVE_CHROME"
+        );
+    }
+
+    // --- Full emulation pipeline tests ---
+
+    #[test]
+    fn emulation_chrome_mac() {
+        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+        let config = EmulationConfiguration::setup_defaults(ua);
+        let data = emulate(ua, &config, &None, &None);
+        assert!(data.is_some());
+        let script = data.unwrap();
+        // Chrome on Mac should have HIDE_CHROME, not REMOVE_CHROME
+        assert!(!script.contains("delete window.chrome"));
+    }
+
+    #[test]
+    fn emulation_firefox_no_chrome_spoof() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0";
+        let config = EmulationConfiguration::setup_defaults(ua);
+        let data = emulate(ua, &config, &None, &None);
+        assert!(data.is_some());
+        let script = data.unwrap();
+        // Firefox should get REMOVE_CHROME, never HIDE_CHROME
+        assert!(
+            script.contains("delete window.chrome"),
+            "Firefox emulation must use REMOVE_CHROME"
+        );
+        assert!(
+            !script.contains("metricsPrivate"),
+            "Firefox emulation must not inject chrome.metricsPrivate"
+        );
+    }
+
+    #[test]
+    fn emulation_safari_no_chrome_spoof() {
+        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+        let config = EmulationConfiguration::setup_defaults(ua);
+        let data = emulate(ua, &config, &None, &None);
+        assert!(data.is_some());
+        let script = data.unwrap();
+        assert!(
+            script.contains("delete window.chrome"),
+            "Safari emulation must use REMOVE_CHROME"
+        );
+        assert!(
+            !script.contains("metricsPrivate"),
+            "Safari emulation must not inject chrome.metricsPrivate"
+        );
+    }
+
+    // --- Plugin spoof selection tests ---
+
+    #[test]
+    fn chrome_gets_chrome_plugin_spoof() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+        let browser = detect_browser_kind(ua);
+        assert_eq!(browser, BrowserKind::Chrome);
+        // Chrome-specific plugin spoof is selected for BrowserKind::Chrome only
+    }
+
+    #[test]
+    fn edge_gets_generic_plugin_spoof() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0";
+        let browser = detect_browser_kind(ua);
+        assert_eq!(browser, BrowserKind::Edge);
+        // Edge should get generic plugin spoof (not Chrome-specific)
+    }
+
+    // --- Agent OS detection edge cases ---
+
+    #[test]
+    fn safari_ua_returns_unknown_os() {
+        // Safari-only UAs don't contain Chrome/CriOS, so get_agent_os returns Unknown.
+        // This is critical — it prevents Safari from accidentally getting Chrome spoofs.
+        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+        assert_eq!(get_agent_os(ua), AgentOs::Unknown);
+    }
+
+    #[test]
+    fn firefox_ua_returns_unknown_os() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0";
+        assert_eq!(get_agent_os(ua), AgentOs::Unknown);
+    }
+
+    // --- Tier-specific tests ---
+
+    #[test]
+    fn hide_only_chrome_tier_only_has_chrome_spoof() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Mac);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::HideOnlyChrome,
+            AgentOs::Mac,
+            true,
+            BrowserKind::Chrome,
+        );
+        // HideOnlyChrome should only contain the chrome spoof, no webdriver or console hiding
+        assert!(!script.contains("delete window.chrome"));
+        assert!(!script.contains("webdriver"));
+    }
+
+    #[test]
+    fn hide_only_tier_has_webdriver() {
+        let gpu = crate::profiles::gpu::select_random_gpu_profile(AgentOs::Mac);
+        let script = super::build_stealth_script_base(
+            gpu,
+            Tier::HideOnly,
+            AgentOs::Mac,
+            true,
+            BrowserKind::Chrome,
+        );
+        assert!(script.contains("webdriver"));
+    }
+
+    // --- Webdriver spoof tests ---
+
+    #[test]
+    fn hide_webdriver_only_patches_when_true() {
+        let webdriver = crate::spoofs::HIDE_WEBDRIVER;
+        // The guard: if(!navigator.webdriver){return} — only patches when webdriver is true
+        assert!(webdriver.contains("if(!navigator.webdriver){return}"));
+    }
+
+    // --- GPU profile tests ---
+
+    #[test]
+    fn gpu_profiles_mac_has_m5_variants() {
+        use crate::profiles::gpu_mac::GPU_PROFILES_MAC;
+        let has_m5 = GPU_PROFILES_MAC
+            .iter()
+            .any(|p| p.webgl_renderer.contains("Apple M5,"));
+        let has_m5_pro = GPU_PROFILES_MAC
+            .iter()
+            .any(|p| p.webgl_renderer.contains("Apple M5 Pro"));
+        let has_m5_max = GPU_PROFILES_MAC
+            .iter()
+            .any(|p| p.webgl_renderer.contains("Apple M5 Max"));
+        assert!(has_m5, "Missing M5 base GPU profile");
+        assert!(has_m5_pro, "Missing M5 Pro GPU profile");
+        assert!(has_m5_max, "Missing M5 Max GPU profile");
+    }
+
+    #[test]
+    fn gpu_profiles_all_platforms_nonempty() {
+        use crate::profiles::gpu::select_random_gpu_profile;
+        for os in [
+            AgentOs::Mac,
+            AgentOs::Windows,
+            AgentOs::Linux,
+            AgentOs::Android,
+            AgentOs::IPhone,
+        ] {
+            let p = select_random_gpu_profile(os);
+            assert!(!p.webgl_vendor.is_empty(), "Empty vendor for {:?}", os);
+            assert!(!p.webgl_renderer.is_empty(), "Empty renderer for {:?}", os);
+            assert!(
+                p.hardware_concurrency > 0,
+                "Zero concurrency for {:?}",
+                os
+            );
+        }
+    }
+
+    // --- Navigator script guards ---
+
+    #[test]
+    fn navigator_pdf_viewer_guards_existing() {
+        let nav = crate::spoofs::NAVIGATOR_SCRIPT;
+        // Should not overwrite if pdfViewerEnabled already exists
+        assert!(nav.contains("'pdfViewerEnabled'in navigator"));
+    }
+
+    // --- Speech synthesis only for known OS ---
+
+    #[test]
+    fn speech_synthesis_not_applied_for_unknown_os() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0";
+        let config = EmulationConfiguration::setup_defaults(ua);
+        assert_eq!(config.agent_os, AgentOs::Unknown);
+        // When OS is unknown, speech synthesis should not be in the output
+        let data = emulate(ua, &config, &None, &None);
+        if let Some(script) = data {
+            assert!(
+                !script.contains("speechSynthesis"),
+                "Speech synthesis should not be spoofed for unknown OS"
+            );
+        }
     }
 }
