@@ -145,4 +145,22 @@ pub static GPU_PROFILES_MAC: &[GpuProfile] = &[
         canvas_format: "bgra8unorm",
         hardware_concurrency: 10,
     },
+    // Apple M5 Pro
+    GpuProfile {
+        webgl_vendor: "Google Inc. (Apple)",
+        webgl_renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 12,
+    },
+    // Apple M5 Max
+    GpuProfile {
+        webgl_vendor: "Google Inc. (Apple)",
+        webgl_renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)",
+        webgpu_vendor: "apple",
+        webgpu_architecture: "metal-3",
+        canvas_format: "bgra8unorm",
+        hardware_concurrency: 16,
+    },
 ];
